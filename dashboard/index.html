@@ -1,0 +1,1588 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spark Dashboard</title>
+<script>
+  // 尽早应用主题，避免闪烁
+  try { document.documentElement.dataset.theme = localStorage.getItem("spark-theme") || "dark"; } catch {}
+  const qp = new URLSearchParams(location.search);
+  if (qp.get("theme")) document.documentElement.dataset.theme = qp.get("theme");
+</script>
+<style>
+  :root, [data-theme="light"] {
+    --bg: #f3f4f1; --header: rgba(243,244,241,.86); --card: #ffffff; --sunken: #f7f8f5;
+    --text: #161a13; --muted: #6a7166; --faint: #9aa196; --line: #e4e7e0; --line-strong: #d3d8cd;
+    --accent: #76b900; --accent-ink: #3e6d00; --accent-soft: rgba(118,185,0,.12);
+    --bad: #d92d20; --bad-soft: rgba(217,45,32,.08); --warn: #c77700; --warn-soft: rgba(199,119,0,.1);
+    --shadow: 0 1px 2px rgba(22,26,19,.04), 0 4px 14px rgba(22,26,19,.05);
+    --chip: #eef0eb;
+  }
+  [data-theme="dark"] {
+    --bg: #0e100d; --header: rgba(14,16,13,.86); --card: #171a15; --sunken: #121411;
+    --text: #e8ebe4; --muted: #8e9689; --faint: #636a5f; --line: #262b23; --line-strong: #343a30;
+    --accent: #76b900; --accent-ink: #9ee233; --accent-soft: rgba(118,185,0,.16);
+    --bad: #f0524a; --bad-soft: rgba(240,82,74,.12); --warn: #f2a93b; --warn-soft: rgba(242,169,59,.12);
+    --shadow: none; --chip: #20241e;
+  }
+  * { box-sizing: border-box; }
+  html { color-scheme: light; } [data-theme="dark"] { color-scheme: dark; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 "Ubuntu", "Inter", system-ui, sans-serif;
+         -webkit-font-smoothing: antialiased; }
+  a { color: inherit; }
+  svg.i { width: 16px; height: 16px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.8;
+          stroke-linecap: round; stroke-linejoin: round; vertical-align: -3px; }
+
+  /* ---------- 顶栏 ---------- */
+  header.top { position: sticky; top: 0; z-index: 10; background: var(--header); backdrop-filter: blur(12px);
+               border-bottom: 1px solid var(--line); }
+  .top-in { max-width: 1480px; margin: 0 auto; display: flex; align-items: center; gap: 10px 24px; flex-wrap: wrap;
+            padding: 12px 24px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; white-space: nowrap; }
+  .brand .logo { width: 22px; height: 22px; border-radius: 6px; background: var(--accent); display: grid; place-items: center; }
+  .brand .logo::after { content: ""; width: 8px; height: 8px; background: #fff; border-radius: 2px; }
+  .brand small { font-weight: 400; color: var(--muted); font-size: 13px; }
+  nav.tabs { display: flex; gap: 2px; padding: 3px; background: var(--chip); border-radius: 10px; }
+  nav.tabs button { background: none; border: 0; color: var(--muted); font: inherit; font-weight: 600; font-size: 13px;
+                    padding: 6px 14px; border-radius: 8px; cursor: pointer; }
+  nav.tabs button.on { background: var(--card); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+  .grow { flex: 1; }
+  .meta { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tools { display: flex; gap: 6px; }
+  .icon-btn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border-radius: 8px;
+              border: 1px solid var(--line); background: var(--card); color: var(--text); font: inherit; font-size: 13px;
+              font-weight: 600; cursor: pointer; }
+  .icon-btn:hover { border-color: var(--line-strong); }
+
+  main { max-width: 1480px; margin: 0 auto; padding: 20px 24px 48px; }
+  .page { display: none; } .page.on { display: block; }
+
+  /* ---------- 卡片网格：同一行等高 ---------- */
+  .row { display: grid; gap: 16px; margin-bottom: 16px; }
+  .row.c4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .row.c2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @media (max-width: 1180px) { .row.c4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 680px) { .row.c4, .row.c2 { grid-template-columns: 1fr; }
+                              .top-in, main { padding-left: 16px; padding-right: 16px; } .meta { display: none; } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px;
+          box-shadow: var(--shadow); display: flex; flex-direction: column; min-width: 0; }
+  .card + .card { margin-top: 0; }
+  .stack > .card { margin-bottom: 16px; }
+  .card-h { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; min-height: 28px; }
+  .card-h h2 { margin: 0; font-size: 13px; font-weight: 600; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+  .card-h h2 svg { color: var(--faint); }
+  .row.c4 .card { min-height: 268px; }
+  .row.c4.short .card { min-height: 300px; }
+
+  .big { font-size: 32px; font-weight: 600; letter-spacing: -.02em; font-variant-numeric: tabular-nums; line-height: 1.15; }
+  .big small { font-size: 14px; color: var(--muted); font-weight: 400; letter-spacing: 0; margin-left: 2px; }
+  canvas.spark { width: 100%; height: 52px; display: block; margin: 10px 0 6px; }
+  canvas.spark.fill { flex: 1; min-height: 52px; height: auto; margin-bottom: 12px; }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 8px 0 0; font-size: 13px; }
+  .row.c4 .kv { margin-top: auto; }
+  .kv dt { color: var(--muted); white-space: nowrap; } .kv dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums;
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar { height: 6px; background: var(--chip); border-radius: 3px; overflow: hidden; margin: 10px 0 6px; }
+  .bar i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 3px; transition: width .4s; }
+  .cores { display: grid; grid-template-columns: repeat(10, 1fr); gap: 3px; margin: 2px 0 10px; }
+  .cores i { height: 14px; border-radius: 3px; background: var(--chip); position: relative; overflow: hidden; }
+  .cores i b { position: absolute; inset: auto 0 0 0; background: var(--accent); }
+  .pill { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 2px 8px;
+          border-radius: 999px; background: var(--chip); color: var(--muted); white-space: nowrap; }
+  .pill.ok { background: var(--accent-soft); color: var(--accent-ink); }
+  .pill.bad { background: var(--bad-soft); color: var(--bad); }
+  .pill.warn { background: var(--warn-soft); color: var(--warn); }
+  .dot { display: inline-block; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+  .dot.on { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); } .dot.bad { background: var(--bad); }
+  .dot.warn { background: var(--warn); }
+
+  ul.rows { list-style: none; margin: 0; padding: 0; }
+  ul.rows li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0;
+               border-top: 1px solid var(--line); min-height: 42px; }
+  ul.rows li:first-child { border-top: 0; }
+  ul.rows li > span:first-child { display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .muted { color: var(--muted); } .faint { color: var(--faint); } .empty { color: var(--muted); padding: 10px 0; font-size: 13px; }
+  .mono { font-family: "Ubuntu Mono", ui-monospace, monospace; }
+  .small { font-size: 12px; }
+
+  /* ---------- 按钮 ---------- */
+  .b { font: inherit; font-size: 13px; font-weight: 600; height: 30px; padding: 0 12px; border-radius: 8px;
+       border: 1px solid var(--line); background: var(--card); color: var(--text); cursor: pointer; text-decoration: none;
+       white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+  .b:hover { border-color: var(--line-strong); background: var(--sunken); }
+  .b.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .b.primary:hover { filter: brightness(1.06); }
+  .b.danger { color: var(--bad); } .b.danger:hover { border-color: var(--bad); background: var(--bad-soft); }
+  .b.ghost { border-color: transparent; background: none; color: var(--muted); }
+  .b.ghost:hover { color: var(--text); background: var(--chip); }
+  .b:disabled { opacity: .45; cursor: default; pointer-events: none; }
+  .b.sm { height: 26px; padding: 0 9px; font-size: 12px; }
+  .acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+
+  .actions { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 8px; }
+  .actions > * { grid-column: span 6; }
+  /* 4 个快速入口：卡片窄时 2×2，宽时一行 4 个；图标在左、名字在右，放不下就省略号 */
+  .actions > .launchers { grid-column: span 12; display: grid; gap: 8px;
+                          grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); }
+  .launch { flex-direction: row !important; align-items: center !important; gap: 8px !important;
+            min-height: 44px !important; padding: 10px 12px !important; }
+  .launch b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .action { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 12px; border-radius: 10px;
+            border: 1px solid var(--line); background: var(--sunken); color: var(--text); font: inherit; text-align: left;
+            cursor: pointer; text-decoration: none; min-height: 68px; }
+  .action:hover { border-color: var(--line-strong); }
+  .action b { font-size: 13px; } .action span { font-size: 12px; color: var(--muted); }
+  .action svg { color: var(--accent-ink); }
+  .action.danger svg { color: var(--bad); }
+  .action:disabled { opacity: .45; cursor: default; }
+  .actions > .toggle { grid-column: span 12; }
+  .action.toggle { flex-direction: row; align-items: center; gap: 12px; }
+  .action.toggle .txt { min-width: 0; }
+  .toggle .txt { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+  .switch { width: 38px; height: 22px; border-radius: 11px; background: var(--line-strong); position: relative; flex: none; transition: background .2s; }
+  .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff;
+                   transition: transform .2s; box-shadow: 0 1px 2px rgba(0,0,0,.25); }
+  .switch.on { background: var(--accent); } .switch.on::after { transform: translateX(16px); }
+  .note { font-size: 12px; color: var(--muted); margin-top: 10px; line-height: 1.45; }
+  .note code { font-size: 11px; background: var(--chip); padding: 1px 5px; border-radius: 4px; word-break: break-all; }
+
+  /* ---------- 表格 ---------- */
+  .scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  td { padding: 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  tr:last-child td { border-bottom: 0; }
+  td.r, th.r { text-align: right; }
+  .chip { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 6px; background: var(--chip);
+          color: var(--muted); margin: 2px 4px 2px 0; white-space: nowrap; }
+  .chip.a { background: var(--accent-soft); color: var(--accent-ink); }
+  button.chip { border: 1px solid transparent; cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; padding: 2px 9px; }
+  button.chip:hover { border-color: var(--accent); color: var(--accent-ink); }
+
+  /* ---------- 表单 ---------- */
+  input, select, textarea { font: inherit; color: var(--text); background: var(--sunken); border: 1px solid var(--line);
+                            border-radius: 8px; padding: 0 12px; height: 36px; width: 100%; outline: none; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  textarea { min-height: 64px; padding: 8px 12px; resize: vertical; font-family: "Ubuntu Mono", ui-monospace, monospace; }
+  input[type=range] { padding: 0; height: 20px; accent-color: var(--accent); background: none; border: 0; box-shadow: none; }
+  label { display: block; font-size: 12px; color: var(--muted); font-weight: 600; margin-bottom: 5px; }
+  .form { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+  .search { display: flex; gap: 8px; }
+  .search .field { position: relative; flex: 1; }
+  .search .field svg { position: absolute; left: 11px; top: 10px; color: var(--faint); }
+  .search .field input { padding-left: 34px; }
+  .search select { width: auto; }
+  .check { display: flex; align-items: center; gap: 8px; color: var(--text); font-size: 14px; font-weight: 400; }
+  .check input { width: auto; height: auto; }
+  .msg { padding: 10px 12px; border-radius: 8px; margin-top: 12px; font-size: 13px; white-space: pre-wrap; word-break: break-word; }
+  .msg.err { background: var(--bad-soft); color: var(--bad); } .msg.ok { background: var(--accent-soft); color: var(--accent-ink); }
+  .msg.info { background: var(--chip); color: var(--muted); }
+
+  .subnav { display: flex; gap: 2px; padding: 3px; background: var(--chip); border-radius: 10px; width: fit-content; margin-bottom: 16px; }
+  .subnav button { background: none; border: 0; color: var(--muted); font: inherit; font-weight: 600; font-size: 13px;
+                   padding: 6px 14px; border-radius: 8px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+  .subnav button.on { background: var(--card); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+  .sec { display: none; } .sec.on { display: block; }
+
+  /* ---------- 搜索结果 ---------- */
+  .results { display: flex; flex-direction: column; }
+  .result { padding: 14px 4px; border-top: 1px solid var(--line); display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; }
+  .result:first-child { border-top: 0; }
+  .result .name { font-weight: 600; font-size: 15px; text-decoration: none; }
+  .result .name:hover { text-decoration: underline; }
+  .result .desc { grid-column: 1 / -1; color: var(--muted); font-size: 13px; }
+  .result .foot { grid-column: 1 / -1; display: flex; align-items: center; gap: 4px 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+  .result .foot span { display: inline-flex; align-items: center; gap: 4px; }
+  .result .side { display: flex; gap: 6px; align-items: start; }
+  .tags { grid-column: 1 / -1; margin-top: 8px; background: var(--sunken); border: 1px solid var(--line); border-radius: 10px; padding: 6px 12px; }
+  .tags table td { padding: 7px 6px; font-size: 13px; }
+
+  .jobs { display: flex; flex-direction: column; gap: 10px; }
+  .job { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; align-items: center; font-size: 13px; }
+  .job .bar { grid-column: 1 / -1; margin: 4px 0 0; }
+
+  dialog { border: 1px solid var(--line); border-radius: 14px; background: var(--card); color: var(--text); padding: 0;
+           width: min(1100px, 94vw); box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+  dialog.narrow { width: min(520px, 94vw); }
+  dialog::backdrop { background: rgba(0,0,0,.45); }
+  .dlg-h { display: flex; align-items: center; gap: 8px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+  .dlg-b { padding: 18px; }
+  dialog pre { margin: 0; padding: 14px 18px; max-height: 70vh; overflow: auto; font: 12px/1.5 "Ubuntu Mono", ui-monospace, monospace;
+               white-space: pre-wrap; word-break: break-all; background: var(--sunken); }
+  #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); padding: 10px 16px; border-radius: 10px;
+           background: var(--text); color: var(--bg); display: none; z-index: 30; max-width: 90vw; font-size: 13px; box-shadow: var(--shadow); }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="i-gpu" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></symbol>
+  <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M8 12h8M12 8v8"/></symbol>
+  <symbol id="i-mem" viewBox="0 0 24 24"><path d="M3 7h18v10H3zM7 7v10M11 7v10M15 7v10M19 17v3M5 17v3"/></symbol>
+  <symbol id="i-disk" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></symbol>
+  <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M2 9a15 15 0 0 1 20 0"/><circle cx="12" cy="19.5" r=".8" fill="currentColor"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5zM3 13l9 5 9-5M3 17.5l9 5 9-5"/></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></symbol>
+  <symbol id="i-proc" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24"><path d="M21 8 12 3 3 8v8l9 5 9-5zM3 8l9 5 9-5M12 13v8"/></symbol>
+  <symbol id="i-brain" viewBox="0 0 24 24"><path d="M9 3a3 3 0 0 0-3 3 3 3 0 0 0-2 5 3 3 0 0 0 1 5 3 3 0 0 0 4 4V3zM15 3a3 3 0 0 1 3 3 3 3 0 0 1 2 5 3 3 0 0 1-1 5 3 3 0 0 1-4 4V3z"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></symbol>
+  <symbol id="i-code" viewBox="0 0 24 24"><path d="m8 7-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 4h10a4 4 0 0 1 4 4v12H8a4 4 0 0 1-4-4zM18 20h2V6"/></symbol>
+  <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></symbol>
+  <symbol id="i-restart" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5"/></symbol>
+  <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 2v10M18.4 6.6a9 9 0 1 1-12.8 0"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 4v12M6 10l6 6 6-6M4 20h16"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20s-7-4.4-9-9a5 5 0 0 1 9-3 5 5 0 0 1 9 3c-2 4.6-9 9-9 9z"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-ext" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M17 6l3 3M14 9l2 2"/></symbol>
+</svg>
+<header class="top"><div class="top-in">
+  <div class="brand"><span class="logo"></span>Spark <small id="hostname"></small></div>
+  <nav class="tabs" id="tabs">
+    <button data-tab="overview" data-i18n="overview"></button>
+    <button data-tab="models" data-i18n="models"></button>
+    <button data-tab="docker">Docker</button>
+    <button data-tab="network" data-i18n="networkTab"></button>
+  </nav>
+  <div class="grow meta" id="meta"></div>
+  <div class="tools">
+    <button class="icon-btn" id="lang-btn" title="Language"><svg class="i"><use href="#i-globe"/></svg><span id="lang-label"></span></button>
+    <button class="icon-btn" id="theme-btn" title="Theme"><svg class="i"><use id="theme-icon" href="#i-sun"/></svg></button>
+  </div>
+</div></header>
+
+<main>
+<!-- ================= 概览 ================= -->
+<section class="page" id="page-overview">
+  <div class="row c4">
+    <div class="card">
+      <div class="card-h"><h2><svg class="i"><use href="#i-gpu"/></svg>GPU</h2><span class="grow"></span><span class="pill" id="gpu-temp"></span></div>
+      <div class="big" id="gpu-util">–</div>
+      <canvas class="spark" id="gpu-chart"></canvas>
+      <dl class="kv" id="gpu-kv"></dl>
+    </div>
+    <div class="card">
+      <div class="card-h"><h2><svg class="i"><use href="#i-cpu"/></svg>CPU</h2><span class="grow"></span><span class="pill" id="cpu-temp"></span></div>
+      <div class="big" id="cpu-util">–</div>
+      <canvas class="spark" id="cpu-chart"></canvas>
+      <div class="cores" id="cores"></div>
+      <dl class="kv" id="cpu-kv"></dl>
+    </div>
+    <div class="card">
+      <div class="card-h"><h2><svg class="i"><use href="#i-mem"/></svg><span data-i18n="memory"></span></h2><span class="grow"></span><span class="pill" data-i18n="unified"></span></div>
+      <div class="big" id="mem-used">–</div>
+      <canvas class="spark" id="mem-chart"></canvas>
+      <dl class="kv" id="mem-kv"></dl>
+    </div>
+    <div class="card">
+      <div class="card-h"><h2><svg class="i"><use href="#i-disk"/></svg><span data-i18n="storage"></span></h2><span class="grow"></span><span class="pill" id="disk-pct"></span></div>
+      <div class="big" id="disk-used">–</div>
+      <canvas class="spark" id="disk-chart"></canvas>
+      <dl class="kv" id="disk-kv"></dl>
+    </div>
+  </div>
+
+  <div class="row c4 short">
+    <div class="card">
+      <div class="card-h"><h2><svg class="i"><use href="#i-wifi"/></svg><span data-i18n="network"></span></h2><span class="grow"></span><span id="net-status"></span></div>
+      <canvas class="spark fill" id="net-chart"></canvas>
+      <dl class="kv" id="net-kv"></dl>
+      <div id="ts-quick" style="margin-top:12px"></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h2><svg class="i"><use href="#i-layers"/></svg><span data-i18n="services"></span></h2></div>
+      <ul class="rows" id="services"></ul>
+    </div>
+    <div class="card">
+      <div class="card-h"><h2><svg class="i"><use href="#i-bolt"/></svg><span data-i18n="quick"></span></h2></div>
+      <div class="actions" id="quick"></div>
+      <div class="note" id="quick-note"></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h2><svg class="i"><use href="#i-proc"/></svg><span data-i18n="gpuProcs"></span></h2></div>
+      <ul class="rows" id="gpu-apps"></ul>
+    </div>
+  </div>
+
+  <div class="row c2">
+    <div class="card">
+      <div class="card-h"><h2><svg class="i"><use href="#i-brain"/></svg><span data-i18n="activeModels"></span></h2><span class="grow"></span>
+        <button class="b sm ghost" onclick="showTab('models')" data-i18n="manage"></button></div>
+      <ul class="rows" id="ov-models"></ul>
+    </div>
+    <div class="card">
+      <div class="card-h"><h2><svg class="i"><use href="#i-box"/></svg><span data-i18n="runningCtrs"></span></h2><span class="grow"></span>
+        <button class="b sm ghost" onclick="showTab('docker')" data-i18n="manage"></button></div>
+      <ul class="rows" id="ov-containers"></ul>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 模型 ================= -->
+<section class="page" id="page-models">
+  <div class="subnav" id="model-tabs">
+    <button data-sec="ollama">Ollama</button>
+    <button data-sec="vllm">vLLM</button>
+    <button data-sec="tensorfold">TensorFold</button>
+  </div>
+
+  <div class="card" id="jobs-card" style="display:none;margin-bottom:16px">
+    <div class="card-h"><h2><svg class="i"><use href="#i-down"/></svg><span data-i18n="downloads"></span></h2></div>
+    <div class="jobs" id="jobs"></div>
+  </div>
+
+  <!-- Ollama -->
+  <div class="sec stack" id="sec-ollama">
+    <div class="card">
+      <div class="card-h"><h2 data-i18n="installedOllama"></h2><span class="grow"></span><button class="b sm ghost" onclick="loadOllama()" data-i18n="refresh"></button></div>
+      <div class="scroll"><table>
+        <thead><tr><th data-i18n="model"></th><th data-i18n="params"></th><th data-i18n="quant"></th><th class="r" data-i18n="size"></th><th data-i18n="status"></th><th class="r"></th></tr></thead>
+        <tbody id="ollama-list"></tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h2><svg class="i"><use href="#i-search"/></svg><span data-i18n="searchOllama"></span></h2><span class="grow"></span>
+        <a class="b sm ghost" href="https://ollama.com/search" target="_blank">ollama.com <svg class="i"><use href="#i-ext"/></svg></a></div>
+      <div class="search">
+        <div class="field"><svg class="i"><use href="#i-search"/></svg><input id="os-q" data-i18n-ph="searchOllamaPh"></div>
+      </div>
+      <div class="results" id="os-results" style="margin-top:8px"></div>
+      <div style="text-align:center;margin-top:8px"><button class="b" id="os-more" style="display:none" onclick="ollamaSearch(true)" data-i18n="loadMore"></button></div>
+    </div>
+  </div>
+
+  <!-- vLLM -->
+  <div class="sec stack" id="sec-vllm">
+    <div class="card" id="vllm-engine"></div>
+    <div class="card">
+      <div class="card-h"><h2 data-i18n="deployments"></h2><span class="grow"></span><button class="b sm ghost" onclick="loadVllm()" data-i18n="refresh"></button></div>
+      <div class="scroll"><table>
+        <thead><tr><th data-i18n="model"></th><th data-i18n="endpoint"></th><th data-i18n="status"></th><th class="r"></th></tr></thead>
+        <tbody id="vllm-deploys"></tbody>
+      </table></div>
+      <div class="note" data-i18n-html="vllmTip"></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h2 data-i18n="hfLocal"></h2><span class="grow"></span><button class="b sm ghost" onclick="loadVllm()" data-i18n="refresh"></button></div>
+      <div class="scroll"><table>
+        <thead><tr><th data-i18n="model"></th><th class="r" data-i18n="size"></th><th data-i18n="status"></th><th class="r"></th></tr></thead>
+        <tbody id="hf-local"></tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h2><svg class="i"><use href="#i-search"/></svg><span data-i18n="searchHf"></span></h2><span class="grow"></span>
+        <button class="b sm ghost" onclick="hfTokenDialog()"><svg class="i"><use href="#i-key"/></svg><span id="hf-token-label"></span></button>
+        <a class="b sm ghost" href="https://huggingface.co/models" target="_blank">huggingface.co <svg class="i"><use href="#i-ext"/></svg></a></div>
+      <div class="search">
+        <div class="field"><svg class="i"><use href="#i-search"/></svg><input id="hf-q" data-i18n-ph="searchHfPh"></div>
+        <select id="hf-task">
+          <option value="llm" data-i18n="taskLlm"></option>
+          <option value="text-generation" data-i18n="taskText"></option>
+          <option value="image-text-to-text" data-i18n="taskVision"></option>
+          <option value="" data-i18n="taskAll"></option>
+        </select>
+      </div>
+      <div class="results" id="hf-results" style="margin-top:8px"></div>
+    </div>
+  </div>
+
+  <!-- TensorFold -->
+  <div class="sec stack" id="sec-tensorfold">
+    <div class="card" id="tf-engine-card"></div>
+    <div class="card">
+      <div class="card-h"><h2 data-i18n="deployments"></h2><span class="grow"></span><button class="b sm ghost" onclick="loadTf()" data-i18n="refresh"></button></div>
+      <div class="scroll"><table>
+        <thead><tr><th data-i18n="model"></th><th data-i18n="endpoint"></th><th data-i18n="status"></th><th class="r"></th></tr></thead>
+        <tbody id="tf-deploys"></tbody>
+      </table></div>
+      <div class="note" data-i18n-html="tfTip"></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h2 data-i18n="tfLocal"></h2><span class="grow"></span><button class="b sm ghost" onclick="loadTf()" data-i18n="refresh"></button></div>
+      <div class="scroll"><table>
+        <thead><tr><th data-i18n="model"></th><th class="r" data-i18n="size"></th><th data-i18n="status"></th><th class="r"></th></tr></thead>
+        <tbody id="tf-local"></tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h2><svg class="i"><use href="#i-search"/></svg><span data-i18n="tfSearch"></span></h2><span class="grow"></span>
+        <a class="b sm ghost" href="https://github.com/MiaAI-Lab/Qwen3.8-Flash-Next-Single-DGX-Spark-TensorFold" target="_blank">recipe <svg class="i"><use href="#i-ext"/></svg></a></div>
+      <p class="note" style="margin:0 0 12px" data-i18n="tfSearchNote"></p>
+      <div class="search">
+        <div class="field"><svg class="i"><use href="#i-search"/></svg><input id="tf-q" data-i18n-ph="tfSearchPh"></div>
+      </div>
+      <div class="results" id="tf-results" style="margin-top:8px"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 网络 ================= -->
+<section class="page" id="page-network">
+  <div class="row c2">
+    <div class="card" id="ts-card"></div>
+    <div class="card">
+      <div class="card-h"><h2 data-i18n="tsSettings"></h2></div>
+      <div id="ts-settings"></div>
+    </div>
+  </div>
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-h"><h2 data-i18n="tsDevices"></h2><span class="grow"></span>
+      <a class="b sm ghost" href="https://login.tailscale.com/admin/machines" target="_blank">admin console <svg class="i"><use href="#i-ext"/></svg></a></div>
+    <div class="scroll"><table>
+      <thead><tr><th data-i18n="tsDevice"></th><th>IP</th><th data-i18n="status"></th><th data-i18n="tsConn"></th><th class="r" data-i18n="tsTraffic"></th><th class="r"></th></tr></thead>
+      <tbody id="ts-peers"></tbody>
+    </table></div>
+  </div>
+  <div class="row c2">
+    <div class="card">
+      <div class="card-h"><h2 data-i18n="tsShare"></h2></div>
+      <div id="ts-share"></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h2 data-i18n="tsNetcheck"></h2><span class="grow"></span><button class="b sm ghost" onclick="loadNetcheck(true)" data-i18n="tsRunCheck"></button></div>
+      <dl class="kv" id="ts-netcheck"></dl>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-h"><h2 data-i18n="localNet"></h2></div>
+    <div class="scroll"><table>
+      <thead><tr><th data-i18n="iface"></th><th data-i18n="status"></th><th>IPv4</th><th>IPv6</th><th>MAC</th></tr></thead>
+      <tbody id="net-ifaces"></tbody>
+    </table></div>
+    <dl class="kv" id="net-detail" style="margin-top:12px;max-width:520px"></dl>
+  </div>
+</section>
+
+<!-- ================= Docker ================= -->
+<section class="page" id="page-docker">
+  <div class="subnav" id="docker-tabs">
+    <button data-sec="containers" data-i18n="containers"></button>
+    <button data-sec="images" data-i18n="images"></button>
+    <button data-sec="volumes" data-i18n="volumes"></button>
+    <button data-sec="run" data-i18n="runNew"></button>
+  </div>
+
+  <div class="sec card" id="sec-containers">
+    <div class="card-h"><h2 data-i18n="containers"></h2><span class="grow"></span><button class="b sm ghost" onclick="loadContainers()" data-i18n="refresh"></button></div>
+    <div class="scroll"><table>
+      <thead><tr><th data-i18n="name"></th><th data-i18n="image"></th><th data-i18n="status"></th><th data-i18n="ports"></th><th class="r"></th></tr></thead>
+      <tbody id="ctr-list"></tbody>
+    </table></div>
+  </div>
+
+  <div class="sec card" id="sec-images">
+    <div class="card-h"><h2 data-i18n="images"></h2><span class="grow"></span>
+      <button class="b sm ghost" onclick="act('/api/docker/prune',{},t('pruned'),loadImages)" data-i18n="prune"></button>
+      <button class="b sm ghost" onclick="loadImages()" data-i18n="refresh"></button></div>
+    <div class="search">
+      <div class="field"><svg class="i"><use href="#i-down"/></svg><input id="pull-image" data-i18n-ph="pullPh"></div>
+      <button class="b primary" style="height:36px" onclick="pullImage()" data-i18n="pull"></button>
+    </div>
+    <div id="image-progress"></div>
+    <div class="scroll" style="margin-top:12px"><table>
+      <thead><tr><th data-i18n="image"></th><th>ID</th><th class="r" data-i18n="size"></th><th data-i18n="created"></th><th class="r"></th></tr></thead>
+      <tbody id="img-list"></tbody>
+    </table></div>
+  </div>
+
+  <div class="sec card" id="sec-volumes">
+    <div class="card-h"><h2 data-i18n="volumes"></h2><span class="grow"></span><button class="b sm ghost" onclick="loadVolumes()" data-i18n="refresh"></button></div>
+    <div class="scroll"><table>
+      <thead><tr><th data-i18n="name"></th><th data-i18n="location"></th><th class="r"></th></tr></thead>
+      <tbody id="vol-list"></tbody>
+    </table></div>
+  </div>
+
+  <div class="sec card" id="sec-run">
+    <div class="card-h"><h2 data-i18n="runNew"></h2></div>
+    <div class="form">
+      <div><label data-i18n="fImage"></label><input id="run-image" data-i18n-ph="fImagePh"></div>
+      <div><label data-i18n="fName"></label><input id="run-name" data-i18n-ph="optional"></div>
+      <div><label data-i18n="fPorts"></label><input id="run-ports" placeholder="8888:8888"></div>
+      <div><label data-i18n="fRestart"></label>
+        <select id="run-restart">
+          <option value="unless-stopped" data-i18n="rUnless"></option>
+          <option value="no" data-i18n="rNo"></option>
+          <option value="always" data-i18n="rAlways"></option>
+          <option value="on-failure" data-i18n="rFail"></option>
+        </select></div>
+      <div><label data-i18n="fEnv"></label><textarea id="run-env"></textarea></div>
+      <div><label data-i18n="fVolumes"></label><textarea id="run-volumes" placeholder="~/notebooks:/workspace"></textarea></div>
+      <div><label data-i18n="fCmd"></label><textarea id="run-cmd"></textarea></div>
+      <div><label>&nbsp;</label><label class="check"><input type="checkbox" id="run-gpu" checked> <span data-i18n="fGpu"></span></label>
+        <p class="note" data-i18n="fNote"></p></div>
+    </div>
+    <div style="margin-top:16px"><button class="b primary" id="run-btn" onclick="runContainer()" data-i18n="run"></button></div>
+    <div id="run-msg"></div>
+  </div>
+</section>
+</main>
+
+<dialog id="logs">
+  <div class="dlg-h"><b id="logs-title"></b><span class="grow"></span>
+    <button class="b sm" onclick="showLogs()" data-i18n="refresh"></button><button class="b sm" onclick="logs.close()" data-i18n="close"></button></div>
+  <pre id="logs-body"></pre>
+</dialog>
+
+<dialog id="deploy" class="narrow">
+  <div class="dlg-h"><b data-i18n="deployTitle"></b><span class="grow"></span><button class="b sm ghost" onclick="deployDlg.close()" data-i18n="close"></button></div>
+  <div class="dlg-b">
+    <div class="mono" id="deploy-model" style="font-weight:600;margin-bottom:16px"></div>
+    <label><span data-i18n="gpuMem"></span>: <b id="gm-val"></b></label>
+    <input type="range" id="gm" min="0.1" max="0.9" step="0.05" value="0.4">
+    <p class="note" style="margin:4px 0 14px" data-i18n="gpuMemNote"></p>
+    <label data-i18n="maxLen"></label><input id="max-len" type="number" placeholder="32768">
+    <p class="note" style="margin:4px 0 14px" data-i18n="maxLenNote"></p>
+    <label data-i18n="extraArgs"></label><input id="extra-args" class="mono" placeholder="--enable-auto-tool-choice --tool-call-parser hermes">
+    <p class="note" style="margin:4px 0 0" id="args-src"></p>
+    <div style="margin-top:18px;display:flex;gap:8px"><button class="b primary" id="deploy-btn" onclick="doDeploy()" data-i18n="deploy"></button></div>
+    <div id="deploy-msg"></div>
+  </div>
+</dialog>
+
+<dialog id="tfdeploy" class="narrow">
+  <div class="dlg-h"><b data-i18n="tfTitle"></b><span class="grow"></span><button class="b sm ghost" onclick="tfDlg.close()" data-i18n="close"></button></div>
+  <div class="dlg-b">
+    <div class="mono" id="tf-model" style="font-weight:600;margin-bottom:6px"></div>
+    <p class="note" style="margin:0 0 16px" data-i18n="tfIntro"></p>
+    <div id="tf-note"></div>
+    <div id="tf-engine"></div>
+    <div class="form" style="grid-template-columns:1fr 1fr;margin-top:14px">
+      <div><label data-i18n="tfParallel"></label>
+        <select id="tf-parallel"><option>1</option><option selected>2</option><option>3</option><option>4</option><option>5</option></select></div>
+      <div><label data-i18n="tfContext"></label>
+        <select id="tf-context"><option value="32768">32K</option><option value="65536">64K</option><option value="131072">128K</option><option value="262144" selected>256K</option></select></div>
+    </div>
+    <label class="check" style="margin-top:12px"><input type="checkbox" id="tf-vision" checked> <span data-i18n="tfVision"></span></label>
+    <div id="tf-mem" class="msg info"></div>
+    <div style="margin-top:18px;display:flex;gap:8px;align-items:center"><button class="b primary" id="tf-btn" onclick="doTfDeploy()" data-i18n="deploy"></button>
+      <label class="check small" id="tf-force-wrap" style="display:none"><input type="checkbox" id="tf-force"> <span data-i18n="tfForce"></span></label></div>
+    <div id="tf-msg"></div>
+  </div>
+</dialog>
+
+<dialog id="oc-dlg" class="narrow">
+  <div class="dlg-h"><b>opencode</b><span class="grow"></span><button class="b sm ghost" onclick="ocDlg.close()" data-i18n="close"></button></div>
+  <div class="dlg-b" id="oc-body"></div>
+</dialog>
+
+<dialog id="hf-token" class="narrow">
+  <div class="dlg-h"><b>Hugging Face Token</b><span class="grow"></span><button class="b sm ghost" onclick="tokenDlg.close()" data-i18n="close"></button></div>
+  <div class="dlg-b">
+    <p class="note" style="margin-top:0" data-i18n-html="hfTokenNote"></p>
+    <input id="hf-token-input" type="password" placeholder="hf_…">
+    <div style="margin-top:14px;display:flex;gap:8px"><button class="b primary" onclick="saveHfToken()" data-i18n="save"></button>
+      <button class="b danger" onclick="saveHfToken(true)" data-i18n="clear"></button></div>
+  </div>
+</dialog>
+<div id="toast"></div>
+
+<script>
+// =============== i18n ===============
+const I18N = {
+  en: {
+    overview: "Overview", models: "Models", memory: "Memory", unified: "CPU + GPU shared", storage: "Storage", network: "Network",
+    services: "Services", quick: "Quick actions", gpuProcs: "GPU processes", activeModels: "Active models", runningCtrs: "Running containers",
+    manage: "Manage", open: "Open", downloads: "Downloads", installedOllama: "Installed models", refresh: "Refresh",
+    model: "Model", params: "Params", quant: "Quant", size: "Size", status: "Status", searchOllama: "Search ollama.com",
+    searchOllamaPh: "Search models, e.g. qwen, llama, gemma, deepseek…", loadMore: "Load more",
+    deployments: "Deployments", endpoint: "Endpoint", hfLocal: "Downloaded from Hugging Face", searchHf: "Search Hugging Face",
+    searchHfPh: "Search repos, e.g. Qwen3, Llama-3.3, gpt-oss…", taskLlm: "LLMs (text + vision)", taskText: "Text only", taskVision: "Vision-language", taskAll: "All tasks",
+    containers: "Containers", images: "Images", volumes: "Volumes", runNew: "Run container", name: "Name", image: "Image", ports: "Ports",
+    prune: "Prune dangling", pruned: "Dangling images removed", pullPh: "Pull an image, e.g. nvcr.io/nvidia/pytorch:25.09-py3", pull: "Pull",
+    created: "Created", location: "Location", fImage: "Image *", fImagePh: "e.g. ubuntu:24.04 (pulled automatically)", fName: "Container name",
+    optional: "Optional", fPorts: "Ports (host:container, comma separated)", fRestart: "Restart policy", rUnless: "Unless stopped",
+    rNo: "Never", rAlways: "Always", rFail: "On failure", fEnv: "Environment (KEY=VALUE per line)",
+    fVolumes: "Mounts (host-path:container-path or volume:path per line)", fCmd: "Command (blank = image default)", fGpu: "Use GPU",
+    fNote: "Ports are bound to localhost only. Click a port in the container list to open it — no extra forwarding needed.",
+    run: "Run", running: "Starting… (first run may pull the image)", started: "Container started", close: "Close", save: "Save", clear: "Clear",
+    deployTitle: "Deploy with vLLM", gpuMem: "Memory budget", gpuMemNote: "Share of the 120 GB unified memory vLLM may reserve (weights + KV cache). Leave room for Ollama and the system.",
+    maxLen: "Max context length", maxLenNote: "Blank = model default. Lower it if the model fails to fit.", extraArgs: "Extra vLLM arguments", argsSrc_readme: "Tool-calling / reasoning parsers taken from the model's README (needed by Open WebUI).",
+    argsSrc_base: "Parsers taken from the base model's README ({0}).", argsSrc_guess: "Parsers guessed from the model name — check the model page if tool calls misbehave.", deploy: "Deploy",
+    vllmTip: "Each deployment is an OpenAI-compatible API. To chat with it in Open WebUI: Admin Settings → Connections → add <code>http://127.0.0.1:&lt;port&gt;/v1</code>.",
+    hfTokenNote: "Needed only for gated models (Llama, Gemma…). Create one at <a href='https://huggingface.co/settings/tokens' target='_blank'>huggingface.co/settings/tokens</a>, and accept the model's license on its page first. Stored only on this machine.",
+    tokenSet: "Token set", tokenNone: "Add token",
+    // dynamic
+    uptime: "Up", updates: "updates available", util: "Utilization", power: "Power", clock: "Clock", driver: "Driver",
+    load: "Load (1/5/15m)", coresLabel: "Cores", iface: "Interface", used: "Used", available: "Available", cache: "Cache", swap: "Swap", off: "Off",
+    read: "Read", write: "Write", free: "Free", online: "Online", offline: "Offline", wifi: "Wi‑Fi", signal: "Signal", ipv4: "IPv4",
+    gateway: "Gateway", dns: "DNS", down: "Down", up: "Up", latency: "Latency",
+    notRunning: "not running", noGpuProcs: "No GPU processes", noModels: "No models loaded — load one from the Models tab",
+    noCtrs: "No running containers", openWebui: "Open WebUI", openWebuiSub: "Chat with local models", jupyter: "JupyterLab",
+    jupyterSub: "PyTorch + CUDA notebooks", codeSub: "VS Code in the browser", notInstalled: "not installed", needCode: "To install VS Code, run:", desktop: "Desktop", desktopOn: "On — lid opens to the GNOME desktop",
+    desktopOff: "Off — lid opens to a command-line login", restart: "Restart", restartSub: "Reboot the machine", shutdown: "Shut down",
+    shutdownSub: "Power off", needControl: "To enable these buttons, run once in a terminal:",
+    confirmDesktopOff: "Turn off the desktop? The GNOME session will close (unsaved work is lost) and the screen switches to a command-line login. Frees GPU memory used by the desktop.",
+    confirmDesktopOn: "Turn the desktop back on?", confirmReboot: "Restart the machine now?", confirmShutdown: "Shut down the machine now? You will need physical access to turn it back on.",
+    desktopOffDone: "Desktop turned off", desktopOnDone: "Desktop starting…", rebooting: "Restarting… the page reconnects when it's back",
+    shuttingDown: "Shutting down…", loaded: "Loaded", notLoaded: "Not loaded", loadBtn: "Load", unload: "Unload", chat: "Chat", del: "Delete",
+    noOllama: "No models yet — search below to download one", ollamaDown: "Ollama is not running",
+    loadingModel: "Loading {0}… large models can take a while", loadedDone: "{0} loaded and kept in memory", unloadedDone: "{0} unloaded",
+    deletedDone: "Deleted {0}", confirmDelModel: "Delete model {0}?", downloadsCount: "downloads", tagsCount: "tags", versions: "Versions",
+    download: "Download", installed: "Installed", noResults: "No results", searching: "Searching…", searchFailed: "Search failed: ",
+    context: "context", started2: "Download started: {0}", already: "Already downloading", engine: "vLLM engine",
+    engineMissing: "The NVIDIA vLLM container ({0}) is not downloaded yet. It is large (~15–20 GB) and only needed once.",
+    engineReady: "Engine ready: {0}", getEngine: "Download engine", noDeploys: "No deployments — download a model below, then click Deploy",
+    ready: "Ready", loadingState: "Loading model…", stopped: "Stopped", apiDocs: "API docs", logs: "Logs", stop: "Stop", start: "Start",
+    remove: "Remove", noHf: "No Hugging Face models yet — search below", complete: "Complete", downloading: "Downloading", incomplete: "Incomplete",
+    confirmDelHf: "Delete {0} from disk?", gated: "Gated", gatedErr: "This model is gated: add a Hugging Face token and accept the license on its model page.",
+    likes: "likes", needEngine: "Download the vLLM engine first", deployed: "Deployed on port {0}. Loading can take a few minutes — watch Logs.",
+    confirmRemoveCtr: "Remove container {0}? (volumes are kept)", restarted: "Restarted", stoppedMsg: "Stopped", startedMsg: "Started",
+    removed: "Removed", working: "Working…", noContainers: "No containers", dockerErr: "Cannot reach Docker: ", noImages: "No images",
+    inUse: "in use", confirmDelImage: "Delete image {0}?", imageDeleted: "Image deleted", noVolumes: "No volumes",
+    confirmDelVol: "Delete volume {0}? Its data is lost permanently.", volDeleted: "Volume deleted", logsTitle: "{0} · last 300 lines",
+    noLogs: "(no output)", error: "Error: ", pulled: "{0} pulled", cancel: "Cancel", done: "Done", failed: "Failed",
+    tokenSaved: "Token saved",
+    networkTab: "Network", tsOn: "Connected", tsOff: "Off", tsNeedsLogin: "Not logged in", tsNeedsApproval: "Awaiting approval", tsStarting: "Starting",
+    tsOnlineDevices: "{0}/{1} devices online", tsLoginHint: "Log in to join your tailnet", tsLogin: "Log in", tsNotInstalled: "Tailscale is not installed.",
+    tsLoginExplain: "Log in with your Tailscale account (Google, Microsoft, GitHub…). This server then joins your private network together with your other devices.",
+    tsApprovalExplain: "This device is waiting for approval in the Tailscale admin console.", tsOpenLogin: "Open login page",
+    tsConnected: "Connected to your tailnet", tsDisconnected: "Disconnected", tsOnExplain: "Reachable from your other devices by its Tailscale IP or name",
+    tsOffExplain: "Turn on to rejoin your private network", tsTailnet: "Tailnet", tsThisDevice: "This device", tsIps: "Tailscale IPs",
+    tsSshCmd: "SSH from anywhere", version: "Version", tsServeEnable: "Your tailnet needs Serve (HTTPS certificates) turned on once. Click the button below and enable it — sharing finishes by itself afterwards.", tsServeEnableBtn: "Enable Serve on Tailscale", ocSub: "AI coding agent", ocIntro: "First visit: on the opencode page choose “Use password” and paste the password below (the browser remembers it).",
+    ocPassword: "Password", copy: "Copy", copied: "Copied", ocDefault: "Default model", ocModels: "Models (auto-detected)",
+    ocAuto: "Running deployments (TensorFold / vLLM) and Ollama models with tool calling are added automatically; opencode restarts when the list changes.",
+    ocOpen: "Open opencode", ocResync: "Re-detect models", ocSynced: "Models re-detected", screen: "Screen", screenOnDesc: "On — closing the lid still turns it off", screenOffDesc: "Off — stays dark even with the lid open", screenOffDone: "Screen turned off", screenOnDone: "Screen turned on", tsReauth: "Switch account / log in again", tsConfirmReauth: "Log in again (for example with another account)? The server stays configured; a new login link appears here.", tsNoOperator: "The dashboard has lost permission to control Tailscale. Run once in a terminal:",
+    tsSettings: "Settings", tsLoginFirst: "Log in to Tailscale first", tsDns: "Use Tailscale DNS (MagicDNS)", tsDnsDesc: "Reach devices by name, e.g. ssh my-mac",
+    tsSsh: "Tailscale SSH", tsSshDesc: "Other tailnet devices can SSH in with their Tailscale identity (no password); access is set by your tailnet policy",
+    tsRoutes: "Accept subnet routes", tsRoutesDesc: "Use LAN routes advertised by other devices", tsAdvExit: "Offer as exit node",
+    tsAdvExitDesc: "Let your devices route internet traffic through this server (approve it in the admin console)",
+    tsShields: "Shields up", tsShieldsDesc: "Block all incoming connections from the tailnet", tsExitNode: "Use exit node", tsExitNone: "None (direct internet)",
+    tsHostname: "Name on the tailnet", tsExitActive: "Internet traffic currently goes through {0}.", saved: "Saved",
+    tsDevices: "Devices on your tailnet", tsDevice: "Device", tsConn: "Connection", tsTraffic: "Traffic", tsDirect: "Direct", tsRelay: "Relay ({0})",
+    tsIdle: "idle", tsLastSeen: "Last seen {0}", tsExitChip: "exit node in use", tsNoPeers: "No other devices yet — install Tailscale on your Mac/phone and log in with the same account",
+    tsShare: "Share dashboard on tailnet", tsServeTitle: "Serve dashboard over HTTPS", tsServeDesc: "Open the dashboard and Open WebUI from any tailnet device, no SSH tunnel",
+    tsServeDash: "Dashboard", tsServeNote: "Only devices in your tailnet can reach these addresses (HTTPS certificates from Tailscale). The dashboard has no login of its own, so don't share your tailnet with people you don't trust. The first time, Tailscale may ask you to enable HTTPS certificates in the admin console.",
+    tsConfirmServe: "Make the dashboard (which can start containers and shut down the machine) reachable from every device in your tailnet?",
+    tsNetcheck: "Connectivity check", tsRunCheck: "Run again", yes: "Yes", no: "No", tsDerp: "Nearest relay (DERP)", tsNatHard: "Hard NAT (direct links harder)",
+    localNet: "Local network", tsDefault: "default", tsLinkRate: "Link rate", deployTf: "Deploy (TensorFold)", tfLocal: "Downloaded Qwen3.8-Flash-Next checkpoints", tfSearch: "Search compatible checkpoints",
+    tfSearchPh: "Filter, e.g. nvidia, uncensored…", tfSearchNote: "Only checkpoints this engine can serve are listed: Qwen3.8-Flash-Next (qwen4_exp) quantized with NVIDIA ModelOpt (NVFP4).",
+    tfRecommended: "Recommended · tested by the recipe", tfUntestedChip: "Untested", tfNoLocal: "No compatible checkpoint downloaded yet — search below",
+    tfNoDeploys: "No TensorFold deployment", tfEngineTitle: "TensorFold engine", tfNeedEngine: "Engine not downloaded",
+    tfTip: "OpenAI-compatible API on port 8888 (model <code>Qwen3.8-Flash-Next</code>). In Open WebUI: Admin Settings → Connections → add <code>http://127.0.0.1:8888/v1</code>. Only one TensorFold model can run at a time.", tfTitle: "Deploy with TensorFold",
+    tfIntro: "Qwen3.8-Flash-Next is too big for vLLM on 120 GB. TensorFold (MiaAI-Lab's single-Spark recipe) serves it in about 81 GB with tool calling, reasoning and vision.",
+    tfParallel: "Requests at once", tfContext: "Context window", tfVision: "Image and video input (+2 GB)",
+    tfForce: "Start anyway", tfUntested: "The recipe was measured with {0}. Other Qwen3.8-Flash-Next checkpoints may load, but memory use and speed are untested.", tfEngineMissing: "The TensorFold engine image is not downloaded yet (recipe author's prebuilt image, pinned by digest).",
+    tfEngineReady: "Engine ready: {0}", tfEnginePulling: "Downloading the engine image… see Downloads above.",
+    tfMem: "Needs ~{0} GB of free memory to start; {1} GB available now.", tfMemLow: "Not enough free memory: stop other models (Ollama / vLLM) and turn off the desktop from Overview, then try again.",
+    tfKv: "{0} requests × {1} GB of context cache are reserved inside the engine.",
+    tfDeployed: "Started. Loading ~81 GB of weights takes about 10 minutes — watch Logs. API: http://127.0.0.1:{0}/v1 (model {1}).", pause: "Pause", resume: "Resume", removeJob: "Remove from list", filesLbl: "files",
+    job_done: "Done", job_error: "Failed", job_paused: "Paused — downloaded data is kept", job_retrying: "Network problem, retrying (#{0})",
+    job_interrupted: "Interrupted — resuming automatically", tokenCleared: "Token cleared", reconnecting: "Disconnected — retrying…",
+  },
+  zh: {
+    overview: "概览", models: "模型", memory: "内存", unified: "CPU + GPU 共享", storage: "存储", network: "网络",
+    services: "服务", quick: "快捷操作", gpuProcs: "GPU 进程", activeModels: "运行中的模型", runningCtrs: "运行中的容器",
+    manage: "管理", open: "打开", downloads: "下载任务", installedOllama: "已下载的模型", refresh: "刷新",
+    model: "模型", params: "参数量", quant: "量化", size: "大小", status: "状态", searchOllama: "搜索 ollama.com",
+    searchOllamaPh: "搜索模型，如 qwen、llama、gemma、deepseek…", loadMore: "加载更多",
+    deployments: "已部署", endpoint: "接口地址", hfLocal: "已从 Hugging Face 下载", searchHf: "搜索 Hugging Face",
+    searchHfPh: "搜索模型仓库，如 Qwen3、Llama-3.3、gpt-oss…", taskLlm: "大模型（文本 + 多模态）", taskText: "仅文本", taskVision: "图文多模态", taskAll: "全部类型",
+    containers: "容器", images: "镜像", volumes: "数据卷", runNew: "运行新容器", name: "名称", image: "镜像", ports: "端口",
+    prune: "清理悬空镜像", pruned: "已清理悬空镜像", pullPh: "拉取镜像，如 nvcr.io/nvidia/pytorch:25.09-py3", pull: "拉取",
+    created: "创建时间", location: "位置", fImage: "镜像 *", fImagePh: "如 ubuntu:24.04（本地没有会自动拉取）", fName: "容器名",
+    optional: "可留空", fPorts: "端口映射（本机:容器，逗号分隔）", fRestart: "重启策略", rUnless: "除非手动停止",
+    rNo: "不自动重启", rAlways: "总是重启", rFail: "出错时重启", fEnv: "环境变量（每行一个 KEY=VALUE）",
+    fVolumes: "挂载（每行一个 本机路径:容器路径 或 卷名:路径）", fCmd: "启动命令（留空用镜像默认）", fGpu: "使用 GPU",
+    fNote: "端口只对本机开放；在容器列表点端口号即可打开，无需额外转发。",
+    run: "运行", running: "启动中（首次可能需要拉取镜像）…", started: "容器已启动", close: "关闭", save: "保存", clear: "清除",
+    deployTitle: "用 vLLM 部署", gpuMem: "内存预算", gpuMemNote: "vLLM 可占用 120 GB 统一内存的比例（权重 + KV 缓存），记得给 Ollama 和系统留空间。",
+    maxLen: "最大上下文长度", maxLenNote: "留空用模型默认值；如果内存放不下就调小。", extraArgs: "额外 vLLM 参数", argsSrc_readme: "工具调用 / 推理解析器取自模型 README（Open WebUI 需要）。",
+    argsSrc_base: "解析器取自原始模型的 README（{0}）。", argsSrc_guess: "解析器按模型名推断——如果工具调用异常，请对照模型页面修改。", deploy: "部署",
+    vllmTip: "每个部署都是 OpenAI 兼容接口。想在 Open WebUI 里聊天：管理员设置 → 外部连接 → 添加 <code>http://127.0.0.1:&lt;端口&gt;/v1</code>。",
+    hfTokenNote: "只有受限模型（Llama、Gemma 等）需要。在 <a href='https://huggingface.co/settings/tokens' target='_blank'>huggingface.co/settings/tokens</a> 创建，并先在模型页面同意许可协议。只保存在本机。",
+    tokenSet: "已设置 Token", tokenNone: "添加 Token",
+    uptime: "已运行", updates: "个系统更新可用", util: "使用率", power: "功耗", clock: "频率", driver: "驱动",
+    load: "负载 (1/5/15 分)", coresLabel: "核心数", iface: "接口", used: "已用", available: "可用", cache: "缓存", swap: "Swap", off: "未启用",
+    read: "读取", write: "写入", free: "剩余", online: "在线", offline: "离线", wifi: "Wi‑Fi", signal: "信号", ipv4: "IPv4",
+    gateway: "网关", dns: "DNS", down: "下载", up: "上传", latency: "延迟",
+    notRunning: "未运行", noGpuProcs: "当前没有 GPU 进程", noModels: "没有加载中的模型，去「模型」页加载一个",
+    noCtrs: "没有运行中的容器", openWebui: "Open WebUI", openWebuiSub: "和本地大模型聊天", jupyter: "JupyterLab",
+    jupyterSub: "PyTorch + CUDA 笔记本", codeSub: "浏览器里的 VS Code", notInstalled: "未安装", needCode: "安装 VS Code 请运行：", desktop: "桌面", desktopOn: "开启 — 打开盖子进入 GNOME 桌面",
+    desktopOff: "关闭 — 打开盖子进入命令行登录", restart: "重启", restartSub: "重新启动电脑", shutdown: "关机",
+    shutdownSub: "关闭电源", needControl: "要启用这些按钮，请在终端运行一次：",
+    confirmDesktopOff: "关闭桌面？GNOME 会话会被关闭（未保存的工作会丢失），屏幕切换到命令行登录，释放桌面占用的显存。",
+    confirmDesktopOn: "重新打开桌面？", confirmReboot: "现在重启电脑？", confirmShutdown: "现在关机？之后需要到电脑前按电源键才能开机。",
+    desktopOffDone: "桌面已关闭", desktopOnDone: "桌面正在启动…", rebooting: "正在重启…开机后页面会自动重连",
+    shuttingDown: "正在关机…", loaded: "已加载", notLoaded: "未加载", loadBtn: "加载", unload: "卸载", chat: "聊天", del: "删除",
+    noOllama: "还没有模型，在下面搜索并下载一个", ollamaDown: "Ollama 未运行",
+    loadingModel: "正在加载 {0}，大模型可能需要几十秒…", loadedDone: "{0} 已加载并常驻内存", unloadedDone: "{0} 已卸载",
+    deletedDone: "已删除 {0}", confirmDelModel: "删除模型 {0}？", downloadsCount: "次下载", tagsCount: "个版本", versions: "版本",
+    download: "下载", installed: "已下载", noResults: "没有结果", searching: "搜索中…", searchFailed: "搜索失败：",
+    context: "上下文", started2: "开始下载：{0}", already: "已经在下载了", engine: "vLLM 引擎",
+    engineMissing: "NVIDIA vLLM 容器（{0}）还没下载。它比较大（约 15–20 GB），只需下载一次。",
+    engineReady: "引擎就绪：{0}", getEngine: "下载引擎", noDeploys: "还没有部署 — 先在下面下载模型，再点「部署」",
+    ready: "就绪", loadingState: "加载模型中…", stopped: "已停止", apiDocs: "接口文档", logs: "日志", stop: "停止", start: "启动",
+    remove: "删除", noHf: "还没有 Hugging Face 模型，在下面搜索", complete: "完整", downloading: "下载中", incomplete: "不完整",
+    confirmDelHf: "从磁盘删除 {0}？", gated: "受限", gatedErr: "这是受限模型：请添加 Hugging Face Token，并在模型页面同意许可协议。",
+    likes: "点赞", needEngine: "请先下载 vLLM 引擎", deployed: "已部署在端口 {0}，加载需要几分钟，可以看日志。",
+    confirmRemoveCtr: "删除容器 {0}？（数据卷会保留）", restarted: "已重启", stoppedMsg: "已停止", startedMsg: "已启动",
+    removed: "已删除", working: "处理中…", noContainers: "还没有容器", dockerErr: "无法连接 Docker：", noImages: "还没有镜像",
+    inUse: "使用中", confirmDelImage: "删除镜像 {0}？", imageDeleted: "已删除镜像", noVolumes: "还没有数据卷",
+    confirmDelVol: "删除数据卷 {0}？里面的数据会永久丢失", volDeleted: "已删除数据卷", logsTitle: "{0} · 最近 300 行日志",
+    noLogs: "（没有日志）", error: "出错了：", pulled: "{0} 拉取完成", cancel: "取消", done: "完成", failed: "失败",
+    tokenSaved: "Token 已保存",
+    networkTab: "网络", tsOn: "已连接", tsOff: "已关闭", tsNeedsLogin: "未登录", tsNeedsApproval: "等待批准", tsStarting: "启动中",
+    tsOnlineDevices: "{0}/{1} 台设备在线", tsLoginHint: "登录后加入你的私有网络", tsLogin: "登录", tsNotInstalled: "未安装 Tailscale。",
+    tsLoginExplain: "用你的 Tailscale 账号登录（可用 Google、Microsoft、GitHub 等）。登录后这台服务器会和你的其他设备组成同一个私有网络。",
+    tsApprovalExplain: "这台设备正在等待 Tailscale 管理后台批准。", tsOpenLogin: "打开登录页面",
+    tsConnected: "已连入私有网络", tsDisconnected: "已断开", tsOnExplain: "其他设备可以用 Tailscale IP 或名字访问这台服务器",
+    tsOffExplain: "打开后重新加入私有网络", tsTailnet: "网络（tailnet）", tsThisDevice: "本机", tsIps: "Tailscale IP",
+    tsSshCmd: "在任何地方 SSH", version: "版本", tsServeEnable: "你的私有网络需要先开启一次 Serve（HTTPS 证书）。点下面的按钮去启用，之后分享会自动完成，不用再点一次。", tsServeEnableBtn: "在 Tailscale 上启用 Serve", ocSub: "AI 编程助手", ocIntro: "第一次打开时，在 opencode 页面选「Use password」，粘贴下面的密码即可（浏览器会记住）。",
+    ocPassword: "密码", copy: "复制", copied: "已复制", ocDefault: "默认模型", ocModels: "模型（自动发现）",
+    ocAuto: "正在运行的部署（TensorFold / vLLM）和支持工具调用的 Ollama 模型会自动加入；列表变化时 opencode 会自动重启。",
+    ocOpen: "打开 opencode", ocResync: "重新检测模型", ocSynced: "已重新检测模型", screen: "屏幕", screenOnDesc: "开启 — 合盖时仍会自动关闭", screenOffDesc: "关闭 — 开盖也保持黑屏，程序照常运行", screenOffDone: "屏幕已关闭", screenOnDone: "屏幕已打开", tsReauth: "切换账号 / 重新登录", tsConfirmReauth: "重新登录（比如换一个账号）？现有设置会保留，登录链接会显示在这里。", tsNoOperator: "面板失去了控制 Tailscale 的权限。请在终端运行一次：",
+    tsSettings: "设置", tsLoginFirst: "请先登录 Tailscale", tsDns: "使用 Tailscale DNS（MagicDNS）", tsDnsDesc: "可以用名字访问设备，比如 ssh my-mac",
+    tsSsh: "Tailscale SSH", tsSshDesc: "私有网络里的其他设备用 Tailscale 身份免密码 SSH 登录，权限由你的 tailnet 策略决定",
+    tsRoutes: "接受子网路由", tsRoutesDesc: "使用其他设备共享的局域网路由", tsAdvExit: "作为出口节点",
+    tsAdvExitDesc: "让你的其他设备通过这台服务器上网（需在管理后台批准）",
+    tsShields: "拒绝所有入站", tsShieldsDesc: "阻止私有网络里的设备连入这台服务器", tsExitNode: "使用出口节点", tsExitNone: "不使用（直接上网）",
+    tsHostname: "在私有网络中的名字", tsExitActive: "当前上网流量经过 {0}。", saved: "已保存",
+    tsDevices: "私有网络中的设备", tsDevice: "设备", tsConn: "连接方式", tsTraffic: "流量", tsDirect: "直连", tsRelay: "中继（{0}）",
+    tsIdle: "空闲", tsLastSeen: "最后在线 {0}", tsExitChip: "正在用作出口", tsNoPeers: "还没有其他设备 — 在 Mac / 手机上安装 Tailscale 并用同一个账号登录",
+    tsShare: "把面板分享到私有网络", tsServeTitle: "通过 HTTPS 提供面板", tsServeDesc: "在私有网络里的任何设备上直接打开面板和 Open WebUI，不需要 SSH 隧道",
+    tsServeDash: "面板", tsServeNote: "只有你私有网络里的设备能访问这些地址（证书由 Tailscale 签发）。面板本身没有登录，所以不要把你的 tailnet 分享给不信任的人。第一次开启时 Tailscale 可能会要求你在管理后台启用 HTTPS 证书。",
+    tsConfirmServe: "让私有网络里的所有设备都能访问面板吗？（面板可以启动容器、关机）",
+    tsNetcheck: "连通性检测", tsRunCheck: "重新检测", yes: "是", no: "否", tsDerp: "最近的中继（DERP）", tsNatHard: "严格 NAT（较难直连）",
+    localNet: "本机网络", tsDefault: "默认", tsLinkRate: "连接速率", deployTf: "部署（TensorFold）", tfLocal: "已下载的 Qwen3.8-Flash-Next 检查点", tfSearch: "搜索可用的检查点",
+    tfSearchPh: "筛选，如 nvidia、uncensored…", tfSearchNote: "只列出这个引擎能跑的检查点：用 NVIDIA ModelOpt（NVFP4）量化的 Qwen3.8-Flash-Next（qwen4_exp）。",
+    tfRecommended: "推荐 · 方案实测", tfUntestedChip: "未测试", tfNoLocal: "还没有下载可用的检查点，在下面搜索",
+    tfNoDeploys: "还没有 TensorFold 部署", tfEngineTitle: "TensorFold 引擎", tfNeedEngine: "引擎未下载",
+    tfTip: "OpenAI 兼容接口在 8888 端口（模型名 <code>Qwen3.8-Flash-Next</code>）。在 Open WebUI：管理员设置 → 外部连接 → 添加 <code>http://127.0.0.1:8888/v1</code>。同一时间只能运行一个 TensorFold 模型。", tfTitle: "用 TensorFold 部署",
+    tfIntro: "Qwen3.8-Flash-Next 用 vLLM 在 120 GB 上放不下。TensorFold（MiaAI-Lab 的单机方案）约用 81 GB，支持工具调用、推理和图像/视频。",
+    tfParallel: "同时处理的请求数", tfContext: "上下文窗口", tfVision: "图像和视频输入（多占 2 GB）",
+    tfForce: "仍然启动", tfUntested: "方案作者实测的是 {0}。其他 Qwen3.8-Flash-Next 版本可能也能加载，但内存占用和速度未经测试。", tfEngineMissing: "TensorFold 引擎镜像还没下载（方案作者的预构建镜像，按 digest 锁定）。",
+    tfEngineReady: "引擎就绪：{0}", tfEnginePulling: "正在下载引擎镜像…进度见上方「下载任务」。",
+    tfMem: "启动需要约 {0} GB 空闲内存；当前可用 {1} GB。", tfMemLow: "空闲内存不够：先停掉其他模型（Ollama / vLLM），并在「概览」里关闭桌面，再试一次。",
+    tfKv: "引擎内为 {0} 个请求各预留 {1} GB 上下文缓存。",
+    tfDeployed: "已启动。加载约 81 GB 权重需要 10 分钟左右，可以看日志。接口：http://127.0.0.1:{0}/v1（模型名 {1}）。", pause: "暂停", resume: "继续", removeJob: "从列表移除", filesLbl: "个文件",
+    job_done: "完成", job_error: "失败", job_paused: "已暂停 — 已下载部分会保留", job_retrying: "网络异常，自动重试中（第 {0} 次）",
+    job_interrupted: "被中断 — 正在自动续传", tokenCleared: "Token 已清除", reconnecting: "连接断开，重试中…",
+  },
+};
+let lang = "en";
+try { lang = localStorage.getItem("spark-lang") || "en"; } catch {}
+if (["en", "zh"].includes(qp.get("lang"))) lang = qp.get("lang");
+const t = (k, ...a) => (I18N[lang][k] ?? I18N.en[k] ?? k).replace(/\{(\d)\}/g, (_, i) => a[i]);
+
+function applyI18n() {
+  document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
+  document.querySelectorAll("[data-i18n]").forEach(el => el.textContent = t(el.dataset.i18n));
+  document.querySelectorAll("[data-i18n-html]").forEach(el => el.innerHTML = t(el.dataset.i18nHtml));
+  document.querySelectorAll("[data-i18n-ph]").forEach(el => el.placeholder = t(el.dataset.i18nPh));
+  $("lang-label").textContent = lang === "en" ? "中文" : "English";
+  last = {};
+  rerender();
+}
+
+// =============== 工具 ===============
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const gib = b => b == null ? "–" : (b / 2 ** 30).toFixed(1) + " GB";
+const size = b => b == null ? "–" : b >= 2 ** 30 ? gib(b) : b >= 2 ** 20 ? (b / 2 ** 20).toFixed(0) + " MB" : (b / 1024).toFixed(0) + " KB";
+const rate = b => b >= 2 ** 20 ? (b / 2 ** 20).toFixed(1) + " MB/s" : (b / 1024).toFixed(0) + " KB/s";
+const pct = v => v == null ? "–" : Math.round(v) + "<small>%</small>";
+const compact = n => n == null ? "–" : n >= 1e9 ? (n / 1e9).toFixed(1) + "B" : n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? (n / 1e3).toFixed(1) + "K" : String(n);
+const date = s => new Date(typeof s === "number" ? s * 1000 : s).toLocaleDateString(lang === "zh" ? "zh-CN" : "en-US", { year: "numeric", month: "short", day: "numeric" });
+const icon = (name, cls = "i") => `<svg class="${cls}"><use href="#i-${name}"/></svg>`;
+const kv = rows => rows.map(([k, v]) => `<dt>${k}</dt><dd title="${esc(String(v ?? "").replace(/<[^>]+>/g, ""))}">${v ?? "–"}</dd>`).join("");
+const rowsOr = (rows, empty) => rows.length ? rows.join("") : `<li class="empty">${empty}</li>`;
+const trOr = (rows, empty, cols) => rows.length ? rows.join("") : `<tr><td colspan="${cols}" class="empty">${empty}</td></tr>`;
+
+// 只在内容变化时替换 DOM —— 否则每秒重绘会吞掉按钮点击
+let last = {};
+function put(id, html) { if (last[id] !== html) { last[id] = html; $(id).innerHTML = html; } }
+
+const fwdPort = location.port || (location.protocol === "https:" ? "443" : "80");
+const viaProxy = port => `${location.protocol}//p${port}.localhost:${fwdPort}/`;
+const ON_TAILNET = location.hostname.endsWith(".ts.net");
+const WEBUI = ON_TAILNET ? `https://${location.hostname}:8443/` : `${location.protocol}//webui.localhost:${fwdPort}/`;
+
+function openUrl(url) {
+  const w = window.open(url, "_blank");
+  if (w) w.opener = null; else location.href = url;
+}
+// 所有新窗口链接统一走 openUrl，被拦截时退回当前页打开
+document.addEventListener("click", e => {
+  const a = e.target.closest("a[target=_blank]");
+  if (!a || e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
+  e.preventDefault(); openUrl(a.href);
+});
+
+function toast(text, ms = 3000) {
+  const el = $("toast"); el.textContent = text; el.style.display = "block";
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => el.style.display = "none", ms);
+}
+// 隐私模式（?privacy=1，用于截图）：显示前替换邮箱、IP、MAC、tailnet 名等；
+// &mask=原文:替换,原文:替换 额外替换主机名、设备名等无法用规则识别的词（只在 URL 里，不进代码）
+const PRIVACY = qp.get("privacy") === "1";
+const MASK_WORDS = (qp.get("mask") || "").split(",").map(x => x.split(":")).filter(x => x[0]);
+const FAKE_IPS = new Map();  // 同一个真实 IP 始终对应同一个假 IP
+function fakeIp(ip, a) {
+  if (!FAKE_IPS.has(ip)) {
+    const k = FAKE_IPS.size;
+    FAKE_IPS.set(ip, a === "100" ? `100.64.0.${10 + k}` : `${["192.0.2", "198.51.100", "203.0.113"][k % 3]}.${10 + k}`);
+  }
+  return FAKE_IPS.get(ip);
+}
+function privacy(text) {
+  for (const [from, to] of MASK_WORDS) text = text.split(from).join(to || "redacted");
+  return text
+    .replace(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g, "user@example.com")
+    .replace(/tail[0-9a-f]{6}\.ts\.net/g, "tail1234.ts.net")
+    .replace(/\b(?:[0-9a-f]{2}:){5}[0-9a-f]{2}\b/gi, "aa:bb:cc:dd:ee:ff")
+    .replace(/\bfd7a:115c:a1e0:[0-9a-f:]+/gi, "fd7a:115c:a1e0::1234")
+    .replace(/\b(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\b/g, (m, a, b) =>
+      a === "127" || a === "0" || (a === "172" && b === "17") ? m : fakeIp(m, a));
+}
+function maskDeep(v) {
+  if (typeof v === "string") return privacy(v);
+  if (Array.isArray(v)) return v.map(maskDeep);
+  if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([k, x]) => [privacy(k), maskDeep(x)]));
+  return v;
+}
+
+async function api(path, body) {
+  const opt = body === undefined ? {} : { method: "POST", headers: { "X-Spark": "1", "Content-Type": "application/json" }, body: JSON.stringify(body) };
+  const r = await fetch(path, opt);
+  let data = await r.json().catch(() => ({ error: `HTTP ${r.status}` }));
+  if (data && data.error) throw new Error(data.error);
+  if (PRIVACY) data = maskDeep(data);
+  return data;
+}
+async function act(path, body, done, reload, confirmText) {
+  if (confirmText && !confirm(confirmText)) return false;
+  try { await api(path, body); if (done) toast(done); } catch (e) { toast(t("error") + e.message, 6000); if (reload) reload(); return false; }
+  if (reload) reload();
+  return true;
+}
+async function stream(path, body, onLine) {
+  const r = await fetch(path, { method: "POST", headers: { "X-Spark": "1", "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const reader = r.body.getReader(), dec = new TextDecoder();
+  let buf = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    const lines = buf.split("\n"); buf = lines.pop();
+    for (const l of lines) if (l.trim()) onLine(JSON.parse(l));
+  }
+}
+function debounce(fn, ms) { let h; return (...a) => { clearTimeout(h); h = setTimeout(() => fn(...a), ms); }; }
+
+// =============== 主题 / 语言 ===============
+function setTheme(th) {
+  document.documentElement.dataset.theme = th;
+  $("theme-icon").setAttribute("href", th === "dark" ? "#i-sun" : "#i-moon");
+  try { localStorage.setItem("spark-theme", th); } catch {}
+  redrawCharts();
+}
+$("theme-btn").onclick = () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+$("lang-btn").onclick = () => { lang = lang === "en" ? "zh" : "en"; try { localStorage.setItem("spark-lang", lang); } catch {} applyI18n(); };
+
+// =============== 标签页 ===============
+function showTab(tab) {
+  document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
+  document.querySelectorAll(".page").forEach(p => p.classList.toggle("on", p.id === "page-" + tab));
+  if (tab === "models") showModelSec(showModelSec.cur || "ollama");
+  if (tab === "docker") showSec(showSec.cur || "containers");
+  if (tab === "network") { loadTs(); loadNetcheck(); }
+  if (tab === "overview") redrawCharts();
+  try { localStorage.setItem("spark-tab", tab); } catch {}
+  history.replaceState(null, "", "#" + tab);
+}
+function showModelSec(sec) {
+  showModelSec.cur = sec;
+  document.querySelectorAll("#model-tabs button").forEach(b => b.classList.toggle("on", b.dataset.sec === sec));
+  document.querySelectorAll("#page-models .sec").forEach(s => s.classList.toggle("on", s.id === "sec-" + sec));
+  if (sec === "ollama") { loadOllama(); if (!ollamaSearch.done) ollamaSearch(); }
+  if (sec === "vllm") { loadVllm(); if (!hfSearch.done) hfSearch(); }
+  if (sec === "tensorfold") { loadTf(); if (!tfSearch.done) tfSearch(); }
+  try { localStorage.setItem("spark-model-sec", sec); } catch {}
+}
+function showSec(sec) {
+  showSec.cur = sec;
+  document.querySelectorAll("#docker-tabs button").forEach(b => b.classList.toggle("on", b.dataset.sec === sec));
+  document.querySelectorAll("#page-docker .sec").forEach(s => s.classList.toggle("on", s.id === "sec-" + sec));
+  ({ containers: loadContainers, images: loadImages, volumes: loadVolumes })[sec]?.();
+}
+$("tabs").onclick = e => { const b = e.target.closest("button"); if (b) showTab(b.dataset.tab); };
+$("model-tabs").onclick = e => { const b = e.target.closest("button"); if (b) showModelSec(b.dataset.sec); };
+$("docker-tabs").onclick = e => { const b = e.target.closest("button"); if (b) showSec(b.dataset.sec); };
+
+// =============== 概览 ===============
+const N = 90, hist = { gpu: [], cpu: [], mem: [], disk: [], net: [] };
+function push(k, v) { hist[k].push(v ?? 0); if (hist[k].length > N) hist[k].shift(); }
+function chart(id, data, max) {
+  const c = $(id); if (!c || !c.offsetParent) return;
+  const dpr = devicePixelRatio || 1; c.width = c.clientWidth * dpr; c.height = c.clientHeight * dpr;
+  const g = c.getContext("2d"), w = c.width, h = c.height, css = getComputedStyle(document.documentElement);
+  const accent = css.getPropertyValue("--accent").trim(), line = css.getPropertyValue("--line").trim();
+  g.clearRect(0, 0, w, h);
+  g.strokeStyle = line; g.lineWidth = dpr; g.setLineDash([3 * dpr, 3 * dpr]);
+  g.beginPath(); g.moveTo(0, h / 2); g.lineTo(w, h / 2); g.stroke(); g.setLineDash([]);
+  if (data.length < 2) return;
+  const top = max ?? Math.max(...data, 1) * 1.15, x0 = w * (N - data.length) / (N - 1);
+  const pts = data.map((v, i) => [x0 + w * i / (N - 1), h - 2 * dpr - (h - 4 * dpr) * Math.min(v / top, 1)]);
+  const grad = g.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, accent + "40"); grad.addColorStop(1, accent + "00");
+  g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y));
+  g.lineTo(w, h); g.lineTo(x0, h); g.closePath(); g.fillStyle = grad; g.fill();
+  g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y));
+  g.strokeStyle = accent; g.lineWidth = 1.6 * dpr; g.lineJoin = "round"; g.stroke();
+}
+function redrawCharts() {
+  chart("gpu-chart", hist.gpu, 100); chart("cpu-chart", hist.cpu, 100); chart("mem-chart", hist.mem, 100);
+  chart("disk-chart", hist.disk); chart("net-chart", hist.net);
+}
+function uptime(s) {
+  const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60);
+  return lang === "zh" ? (d ? d + " 天 " : "") + h + " 小时 " + m + " 分" : (d ? d + "d " : "") + h + "h " + m + "m";
+}
+function portLinks(ports) {
+  return ports.map(p => `<a class="b sm" href="${viaProxy(p)}" target="_blank">${p} ${icon("ext")}</a>`).join(" ");
+}
+function setTemp(id, v) {
+  $(id).className = "pill" + (v >= 85 ? " bad" : v >= 70 ? " warn" : "");
+  $(id).textContent = v != null ? Math.round(v) + "°C" : "";
+}
+
+let stats = null;
+async function tick() {
+  try { stats = await api("/api/stats"); } catch { $("meta").textContent = t("reconnecting"); return; }
+  if (stats.time) rerender();
+}
+function rerender() {
+  const s = stats; if (!s || !s.time) return;
+  const g = s.gpu, m = s.mem, n = s.net || {};
+  $("hostname").textContent = s.hostname ?? "";
+  $("meta").textContent = s.uptime ? `${t("uptime")} ${uptime(s.uptime)}` + (s.updates ? ` · ${s.updates} ${t("updates")}` : "") : "";
+  push("gpu", g?.util); push("cpu", s.cpu.util); push("mem", 100 * m.used / m.total);
+  push("disk", s.disk.read + s.disk.write); push("net", n.rx + n.tx);
+
+  // GPU
+  $("gpu-util").innerHTML = pct(g?.util);
+  setTemp("gpu-temp", g?.temp);
+  put("gpu-kv", kv(g ? [[t("model"), esc(g.name.replace(/ \(.*\)/, "").replace("NVIDIA ", ""))], [t("power"), (g.power ?? 0).toFixed(1) + " W"],
+    [t("clock"), `${g.clock} / ${g.clock_max} MHz`], [t("driver"), g.driver]] : [["", "nvidia-smi unavailable"]]));
+  // CPU
+  $("cpu-util").innerHTML = pct(s.cpu.util);
+  setTemp("cpu-temp", s.cpu.temp);
+  $("cores").innerHTML = s.cpu.cores.map(v => `<i title="${Math.round(v)}%"><b style="height:${v}%"></b></i>`).join("");
+  put("cpu-kv", kv([[t("load"), s.cpu.load.map(x => x.toFixed(2)).join(" / ")], [t("coresLabel"), `${s.cpu.count}`]]));
+  // 内存
+  $("mem-used").innerHTML = (m.used / 2 ** 30).toFixed(1) + `<small>/ ${gib(m.total)}</small>`;
+  put("mem-kv", kv([[t("available"), gib(m.total - m.used)], [t("cache"), gib(m.cached)],
+    [t("swap"), m.swap_total ? `${gib(m.swap_used)} / ${gib(m.swap_total)}` : t("off")]]));
+  // 存储
+  const dp = 100 * s.disk.used / s.disk.total;
+  $("disk-used").innerHTML = (s.disk.used / 2 ** 30).toFixed(0) + `<small>GB / ${(s.disk.total / 2 ** 40).toFixed(1)} TB</small>`;
+  $("disk-pct").textContent = dp.toFixed(0) + "%";
+  put("disk-kv", kv([[t("read"), rate(s.disk.read)], [t("write"), rate(s.disk.write)], [t("free"), gib(s.disk.total - s.disk.used)]]));
+  // 网络
+  const inet = n.internet, w = n.wifi, link = (n.links || []).find(l => l.name === n.dev);
+  put("net-status", inet ? `<span class="pill ${inet.ok ? "ok" : "bad"}"><i class="dot ${inet.ok ? "on" : "bad"}"></i>${inet.ok ? t("online") : t("offline")}</span>` : "");
+  const sig = w ? `${w.signal}%` + (w.dbm != null ? ` <span class="faint">(${w.dbm} dBm)</span>` : "") : null;
+  put("net-kv", kv([
+    ...(w ? [[t("wifi"), esc(w.ssid)], [t("signal"), sig]] : [[t("iface"), esc(n.dev)]]),
+    [t("ipv4"), link?.ipv4?.[0] ? `<span class="mono">${esc(link.ipv4[0])}</span>` : "–"],
+    [t("gateway"), n.gateway ? `<span class="mono">${esc(n.gateway)}</span>` : "–"],
+    [t("dns"), (n.dns || []).length ? `<span class="mono">${esc(n.dns.join(", "))}</span>` : "–"],
+    [`${t("down")} / ${t("up")}`, `${rate(n.rx || 0)} / ${rate(n.tx || 0)}`],
+    [t("latency"), inet?.latency != null ? inet.latency + " ms" : "–"],
+  ]));
+  redrawCharts();
+  renderTsQuick(s.tailscale);
+  if ($("page-network").classList.contains("on")) renderLocalNet(n, inet);
+
+  // GPU 进程
+  put("gpu-apps", rowsOr((g?.apps ?? []).map(a => `<li><span><span class="chip">${a.type === "G" ? "Graphics" : "Compute"}</span>${esc(a.name)} <span class="faint small">${a.pid}</span></span>` +
+    `<span class="muted small">${a.mem_mib != null ? (a.mem_mib >= 1024 ? (a.mem_mib / 1024).toFixed(1) + " GB" : a.mem_mib + " MB") : ""}</span></li>`), t("noGpuProcs")));
+  if (!s.services) return;
+
+  // 服务
+  const href = { webui: WEBUI, jupyter: "/open/jupyter", code: "/open/code" };
+  put("services", s.services.map(v => {
+    const btn = v.installed === false ? "" : v.open === "opencode" ? `<button class="b sm" onclick="openOpencode()">${t("open")} ${icon("ext")}</button>`
+      : v.open ? `<a class="b sm" href="${href[v.open]}" target="_blank">${t("open")} ${icon("ext")}</a>`
+                       : `<button class="b sm" onclick="showTab('${v.tab}')">${t("manage")}</button>`;
+    return `<li><span><i class="dot ${v.ok ? "on" : "bad"}"></i>${esc(v.name)}${v.ok ? "" : ` <span class="muted small">${v.installed === false ? t("notInstalled") : t("notRunning")}</span>`}</span>${btn}</li>`;
+  }).join(""));
+
+  // 快捷操作
+  const d = s.desktop || {}, ctl = d.control, sc = s.screen || {};
+  put("quick", `
+    <div class="launchers">
+    <a class="action launch" href="${WEBUI}" target="_blank" title="${t("openWebuiSub")}">${icon("chat")}<b>${t("openWebui")}</b></a>
+    <a class="action launch" href="/open/jupyter" target="_blank" title="${t("jupyterSub")}">${icon("book")}<b>${t("jupyter")}</b></a>
+    <a class="action launch" href="/open/code" target="_blank" title="${t("codeSub")}">${icon("code")}<b>VS Code</b></a>
+    <button class="action launch" onclick="openOpencode()" title="${t("ocSub")}">${icon("bolt")}<b>opencode</b></button>
+    </div>
+    <button class="action toggle" onclick="toggleDesktop(${!d.active})" ${ctl ? "" : "disabled"}>${icon("monitor")}
+      <span class="txt"><b>${t("desktop")}</b><span>${d.active ? t("desktopOn") : t("desktopOff")}</span></span><span class="switch ${d.active ? "on" : ""}"></span></button>
+    <button class="action toggle" onclick="setScreen(${!sc.off})" ${sc.service === false ? "disabled" : ""}>${icon("sun")}
+      <span class="txt"><b>${t("screen")}</b><span>${sc.off ? t("screenOffDesc") : t("screenOnDesc")}</span></span><span class="switch ${sc.off ? "" : "on"}"></span></button>
+    <button class="action" onclick="sysAction('reboot')" ${ctl ? "" : "disabled"}>${icon("restart")}<b>${t("restart")}</b><span>${t("restartSub")}</span></button>
+    <button class="action danger" onclick="sysAction('poweroff')" ${ctl ? "" : "disabled"}>${icon("power")}<b>${t("shutdown")}</b><span>${t("shutdownSub")}</span></button>`);
+  put("quick-note", ctl ? "" : `${t("needControl")} <code>~/.local/share/spark/install-power-control.sh</code>`);
+
+  // 运行中的模型（Ollama + vLLM）
+  put("ov-models", rowsOr([
+    ...s.models_loaded.map(x => `<li><span><i class="dot on"></i>${esc(x.name)}<span class="chip">Ollama</span></span><span class="muted small">${gib(x.size)}</span></li>`),
+    ...s.vllm.map(x => `<li><span><i class="dot on"></i>${esc(x.model)}<span class="chip a">${x.engine === "tensorfold" ? "TensorFold" : "vLLM"}</span></span><span>${portLinks(x.ports)}</span></li>`),
+  ], t("noModels")));
+  const running = s.containers.filter(c => c.state === "running");
+  put("ov-containers", rowsOr(running.map(c => `<li><span><i class="dot on"></i>${esc(c.name)} <span class="faint small mono">${esc(c.image)}</span></span><span>${portLinks(c.ports)}</span></li>`), t("noCtrs")));
+}
+
+async function toggleDesktop(on) {
+  if (!confirm(on ? t("confirmDesktopOn") : t("confirmDesktopOff"))) return;
+  if (await act("/api/system", { action: on ? "desktop-on" : "desktop-off" }, on ? t("desktopOnDone") : t("desktopOffDone"))) setTimeout(tick, 2500);
+}
+async function setScreen(off) {
+  await act("/api/screen", { off }, off ? t("screenOffDone") : t("screenOnDone"));
+  setTimeout(tick, 1200);
+}
+async function sysAction(a) {
+  if (!confirm(a === "reboot" ? t("confirmReboot") : t("confirmShutdown"))) return;
+  await act("/api/system", { action: a }, a === "reboot" ? t("rebooting") : t("shuttingDown"));
+}
+
+// =============== 下载任务 ===============
+let jobState = [];
+async function pollJobs() {
+  if (!$("page-models").classList.contains("on")) return;
+  try { jobState = await api("/api/jobs"); } catch { return; }
+  const active = st => ["running", "retrying", "interrupted"].includes(st);
+  const prev = pollJobs.running || 0, running = jobState.filter(j => active(j.status)).length;
+  $("jobs-card").style.display = jobState.length ? "" : "none";
+  const pill = { done: "ok", error: "bad", paused: "", retrying: "warn", interrupted: "warn" };
+  put("jobs", jobState.sort((a, b) => b.started - a.started).map(j => {
+    const p = j.total ? 100 * j.completed / j.total : 0;
+    const kind = { ollama: "Ollama", hf: "Hugging Face", image: "Docker" }[j.kind];
+    const prog = j.total ? `${size(j.completed)} / ${size(j.total)} · ${p.toFixed(0)}%` : esc(j.detail || "…");
+    const st = j.status === "running" ? prog
+      : `<span class="pill ${pill[j.status] ?? ""}">${t("job_" + j.status, j.attempt)}</span>` + (j.status !== "done" && j.total ? ` ${prog}` : "");
+    const btns = !j.persistent ? "" :
+      (active(j.status) && j.status !== "interrupted" ? `<button class="b sm ghost" onclick="act('/api/jobs/pause',{id:'${j.id}'},null,pollJobs)">${t("pause")}</button>` : "") +
+      (["paused", "error", "interrupted"].includes(j.status) ? `<button class="b sm ghost" onclick="act('/api/jobs/resume',{id:'${j.id}'},null,pollJobs)">${t("resume")}</button>` : "") +
+      (!active(j.status) ? `<button class="b sm ghost" title="${t("removeJob")}" onclick="act('/api/jobs/remove',{id:'${j.id}'},null,pollJobs)">✕</button>` : "");
+    const msg = j.error ? `<div class="msg ${j.status === "error" ? "err" : "info"}" style="grid-column:1/-1;margin-top:4px">${esc(j.error.startsWith("GATED") ? t("gatedErr") + "\n" + j.error : j.error)}</div>` : "";
+    return `<div class="job"><span><b>${esc(j.name)}</b> <span class="chip">${kind}</span>${j.files ? ` <span class="faint small">${j.files} ${t("filesLbl")}</span>` : ""}</span>` +
+      `<span class="muted">${st}${btns}</span>${j.status !== "done" && j.total ? `<div class="bar"><i style="width:${p}%"></i></div>` : ""}${msg}</div>`;
+  }).join(""));
+  if (running < prev) { loadOllama(); loadVllm(); loadTf(); }  // 有任务刚结束，刷新列表
+  pollJobs.running = running;
+}
+
+// =============== Ollama ===============
+let installed = new Set();
+async function loadOllama() {
+  let ms;
+  try { ms = await api("/api/ollama/models"); } catch (e) { put("ollama-list", trOr([], t("ollamaDown"), 6)); return; }
+  installed = new Set(ms.map(m => m.name));
+  put("ollama-list", trOr(ms.map(m => `<tr><td><b>${esc(m.name)}</b><div class="faint small">${esc(m.family || "")}</div></td><td>${esc(m.params)}</td>` +
+    `<td class="muted mono small">${esc(m.quant)}</td><td class="r">${size(m.size)}</td>` +
+    `<td>${m.loaded ? `<span class="pill ok"><i class="dot on"></i>${t("loaded")}</span>` : `<span class="muted">${t("notLoaded")}</span>`}</td>` +
+    `<td><div class="acts">` +
+    (m.loaded ? `<button class="b sm" onclick="modelAct('unload','${esc(m.name)}')">${t("unload")}</button>`
+              : `<button class="b sm" onclick="modelAct('load','${esc(m.name)}')">${t("loadBtn")}</button>`) +
+    `<a class="b sm" href="${WEBUI}?model=${encodeURIComponent(m.name)}" target="_blank">${t("chat")} ${icon("ext")}</a>` +
+    `<button class="b sm danger" onclick="modelAct('delete','${esc(m.name)}')">${t("del")}</button></div></td></tr>`), t("noOllama"), 6));
+  document.querySelectorAll("[data-ollama-tag]").forEach(b => { if (installed.has(b.dataset.ollamaTag)) markInstalled(b); });
+}
+function markInstalled(b) { b.outerHTML = `<span class="pill ok">${t("installed")}</span>`; }
+async function modelAct(action, name) {
+  if (action === "delete" && !confirm(t("confirmDelModel", name))) return;
+  if (action === "load") toast(t("loadingModel", name), 60000);
+  await act("/api/ollama/" + action, { name }, { load: t("loadedDone", name), unload: t("unloadedDone", name), delete: t("deletedDone", name) }[action], loadOllama);
+}
+async function pullOllama(name) {
+  try { await api("/api/ollama/pull", { name }); toast(t("started2", name)); } catch (e) { toast(t("error") + e.message); }
+  pollJobs();
+}
+
+let osPage = 1;
+async function ollamaSearch(more) {
+  ollamaSearch.done = true;
+  const q = $("os-q").value.trim();
+  osPage = more ? osPage + 1 : 1;
+  if (!more) $("os-results").innerHTML = `<div class="empty">${t("searching")}</div>`;
+  let d;
+  try { d = await api(`/api/ollama/search?q=${encodeURIComponent(q)}&page=${osPage}`); }
+  catch (e) { $("os-results").innerHTML = `<div class="msg err">${t("searchFailed")}${esc(e.message)}</div>`; return; }
+  if (q !== $("os-q").value.trim()) return;  // 输入已变化
+  const html = d.results.map(r => {
+    const sizes = r.sizes.map(sz => {
+      const tag = `${r.name}:${sz}`;
+      return installed.has(tag) ? `<span class="chip a">${esc(sz)} ✓</span>` : `<button class="chip" title="${t("download")} ${esc(tag)}" onclick="pullOllama('${esc(tag)}')">${icon("down")} ${esc(sz)}</button>`;
+    }).join("");
+    return `<div class="result" id="os-${esc(r.name)}">
+      <div><a class="name" href="https://ollama.com/library/${esc(r.name)}" target="_blank">${esc(r.name)}</a>
+        ${r.caps.map(c => `<span class="chip a">${esc(c)}</span>`).join("")}</div>
+      <div class="side"><button class="b sm" onclick="ollamaTags('${esc(r.name)}', this)">${t("versions")} ▾</button></div>
+      <div class="desc">${esc(r.desc)}</div>
+      <div class="foot">${sizes ? `<span>${sizes}</span>` : ""}
+        <span>${icon("down")} ${compact(r.downloads)}</span>${r.tags ? `<span>${r.tags} ${t("tagsCount")}</span>` : ""}
+        ${r.updated ? `<span>${icon("clock")} ${esc(r.updated)}</span>` : ""}</div></div>`;
+  }).join("");
+  if (more) $("os-results").insertAdjacentHTML("beforeend", html); else $("os-results").innerHTML = html || `<div class="empty">${t("noResults")}</div>`;
+  $("os-more").style.display = d.more ? "" : "none";
+}
+async function ollamaTags(name, btn) {
+  const box = document.getElementById("os-" + name), old = box.querySelector(".tags");
+  if (old) { old.remove(); return; }
+  box.insertAdjacentHTML("beforeend", `<div class="tags"><div class="empty">${t("searching")}</div></div>`);
+  let tags;
+  try { tags = await api("/api/ollama/tags?name=" + encodeURIComponent(name)); }
+  catch (e) { box.querySelector(".tags").innerHTML = `<div class="msg err">${esc(e.message)}</div>`; return; }
+  box.querySelector(".tags").innerHTML = `<table>${tags.map(x => `<tr><td class="mono"><b>${esc(x.tag)}</b></td><td class="muted">${esc(x.size)}</td>` +
+    `<td class="muted">${esc(x.ctx)} ${t("context")}</td><td class="muted">${esc(x.inputs)}</td><td class="r">` +
+    (installed.has(x.tag) ? `<span class="pill ok">${t("installed")}</span>` : `<button class="b sm primary" data-ollama-tag="${esc(x.tag)}" onclick="pullOllama('${esc(x.tag)}')">${t("download")}</button>`) +
+    `</td></tr>`).join("") || `<tr><td class="empty">${t("noResults")}</td></tr>`}</table>`;
+}
+$("os-q").addEventListener("input", debounce(() => ollamaSearch(), 350));
+
+// =============== vLLM / Hugging Face ===============
+let vstat = null;
+async function loadVllm() {
+  try { vstat = await api("/api/vllm/status"); } catch (e) { put("vllm-deploys", trOr([], t("dockerErr") + esc(e.message), 4)); return; }
+  const imgJob = jobState.find(j => j.kind === "image" && j.status === "running");
+  put("vllm-engine", `<div class="card-h"><h2>${icon("bolt")}${t("engine")}</h2><span class="grow"></span>` +
+    (vstat.present ? `<span class="pill ok"><i class="dot on"></i>${t("ready")}</span>` : `<span class="pill warn">${t("needEngine")}</span>`) + `</div>` +
+    (vstat.present ? `<div class="muted">${t("engineReady", `<span class="mono">${esc(vstat.image)}</span>`)}</div>`
+     : `<div class="muted">${t("engineMissing", `<span class="mono">${esc(vstat.image)}</span>`)}</div>
+        <div style="margin-top:12px"><button class="b primary" ${imgJob ? "disabled" : ""} onclick="pullEngine()">${icon("down")} ${t("getEngine")}</button></div>`));
+  put("vllm-deploys", trOr(vstat.deployments.filter(c => c.engine !== "tensorfold").map(c => {
+    const on = c.state === "running", port = c.ports[0];
+    const st = !on ? `<span class="pill">${t("stopped")}</span>` : c.ready ? `<span class="pill ok"><i class="dot on"></i>${t("ready")}</span>` : `<span class="pill warn"><i class="dot warn"></i>${t("loadingState")}</span>`;
+    const tf = c.engine === "tensorfold";
+    return `<tr><td><b>${esc(c.model)}</b> <span class="chip ${tf ? "a" : ""}">${tf ? "TensorFold" : "vLLM"}</span><div class="faint small mono">${esc(c.name)}</div></td>` +
+      `<td class="mono small">${port ? `http://127.0.0.1:${port}/v1` : "–"}</td><td>${st}</td><td><div class="acts">` +
+      (on && port && !tf ? `<a class="b sm" href="${viaProxy(port)}docs" target="_blank">${t("apiDocs")} ${icon("ext")}</a>` : "") +
+      `<button class="b sm" onclick="showLogs('${c.id}','${esc(c.name)}')">${t("logs")}</button>` +
+      (on ? `<button class="b sm" onclick="ctrAct('${c.id}','stop',null,loadVllm)">${t("stop")}</button>` : `<button class="b sm" onclick="ctrAct('${c.id}','start',null,loadVllm)">${t("start")}</button>`) +
+      `<button class="b sm danger" onclick="ctrAct('${c.id}','remove','${esc(c.name)}',loadVllm)">${t("remove")}</button></div></td></tr>`;
+  }), t("noDeploys"), 4));
+  let local = [];
+  try { local = await api("/api/hf/local"); } catch {}
+  hfLocal = new Set(local.map(m => m.id));
+  put("hf-local", trOr(local.filter(m => m.engine !== "tensorfold").map(m => {
+    const st = m.downloading ? `<span class="pill warn">${t("downloading")}</span>` : m.complete ? `<span class="pill ok">${t("complete")}</span>`
+             : m.job === "paused" ? `<span class="pill">${t("job_paused")}</span>` : `<span class="pill bad">${t("incomplete")}</span>`;
+    return `<tr><td><a class="mono" href="https://huggingface.co/${esc(m.id)}" target="_blank"><b>${esc(m.id)}</b></a></td><td class="r">${size(m.size)}</td><td>${st}</td><td><div class="acts">` +
+      (m.complete && m.engine === "tensorfold" ? `<button class="b sm primary" onclick="openTfDeploy('${esc(m.id)}')">${t("deployTf")}</button>` : "") +
+      (m.complete && m.engine !== "tensorfold" ? `<button class="b sm primary" onclick="openDeploy('${esc(m.id)}')">${t("deploy")}</button>` : "") +
+      (!m.complete && !m.downloading ? `<button class="b sm" onclick="hfDownload('${esc(m.id)}')">${t("resume")}</button>` : "") +
+      (!m.downloading ? `<button class="b sm danger" onclick="act('/api/hf/delete',{repo:'${esc(m.id)}'},t('deletedDone','${esc(m.id)}'),loadVllm,t('confirmDelHf','${esc(m.id)}'))">${t("del")}</button>` : "") +
+      `</div></td></tr>`;
+  }), t("noHf"), 4));
+  try { const tok = await api("/api/hf/token"); $("hf-token-label").textContent = tok.set ? t("tokenSet") : t("tokenNone"); } catch {}
+}
+async function pullEngine() {
+  try { await api("/api/vllm/pull-image", { image: vstat.image }); toast(t("started2", vstat.image)); } catch (e) { toast(t("error") + e.message); }
+  pollJobs(); setTimeout(loadVllm, 500);
+}
+
+let hfLocal = new Set();
+async function hfSearch() {
+  hfSearch.done = true;
+  const q = $("hf-q").value.trim(), task = $("hf-task").value;
+  $("hf-results").innerHTML = `<div class="empty">${t("searching")}</div>`;
+  let rs;
+  try { rs = await api(`/api/hf/search?q=${encodeURIComponent(q)}&task=${encodeURIComponent(task)}`); }
+  catch (e) { $("hf-results").innerHTML = `<div class="msg err">${t("searchFailed")}${esc(e.message)}</div>`; return; }
+  if (q !== $("hf-q").value.trim()) return;
+  $("hf-results").innerHTML = rs.map(r => {
+    const params = r.params ? (r.params >= 1e9 ? (r.params / 1e9).toFixed(r.params >= 1e10 ? 0 : 1) + "B" : (r.params / 1e6).toFixed(0) + "M") : null;
+    const have = hfLocal.has(r.id);
+    return `<div class="result">
+      <div><a class="name mono" href="https://huggingface.co/${esc(r.id)}" target="_blank">${esc(r.id)}</a>
+        ${params ? `<span class="chip a">${params}</span>` : ""}${r.dtypes.slice(0, 3).map(x => `<span class="chip">${esc(x)}</span>`).join("")}
+        ${r.gated ? `<span class="chip" style="color:var(--warn)">${icon("key")} ${t("gated")}</span>` : ""}</div>
+      <div class="side">${have ? `<span class="pill ok">${t("installed")}</span>` : `<button class="b sm primary" onclick="hfDownload('${esc(r.id)}', this)">${icon("down")} ${t("download")}</button>`}</div>
+      <div class="foot"><span>${icon("down")} ${compact(r.downloads)}</span><span>${icon("heart")} ${compact(r.likes)}</span>
+        ${r.task ? `<span>${esc(r.task)}</span>` : ""}${r.library ? `<span>${esc(r.library)}</span>` : ""}
+        ${r.updated ? `<span>${icon("clock")} ${date(r.updated)}</span>` : ""}</div></div>`;
+  }).join("") || `<div class="empty">${t("noResults")}</div>`;
+}
+$("hf-q").addEventListener("input", debounce(hfSearch, 400));
+$("hf-task").onchange = hfSearch;
+async function hfDownload(repo, btn) {
+  try { await api("/api/hf/download", { repo }); toast(t("started2", repo)); if (btn) btn.disabled = true; }
+  catch (e) { toast(t("error") + (e.message.includes("already") ? t("already") : e.message)); }
+  pollJobs(); setTimeout(() => { loadVllm(); loadTf(); }, 1500);
+}
+
+const deployDlg = $("deploy");
+$("gm").oninput = () => $("gm-val").textContent = `${Math.round($("gm").value * 100)}% ≈ ${Math.round($("gm").value * 120)} GB`;
+function openDeploy(repo) {
+  if (!vstat?.present) { toast(t("needEngine"), 4000); return; }
+  $("deploy-model").textContent = repo; $("deploy-msg").innerHTML = ""; $("gm").oninput();
+  $("extra-args").value = ""; $("args-src").textContent = "…"; deployDlg.showModal();
+  // 预填工具调用 / 推理解析器（Open WebUI 需要）
+  api("/api/vllm/recommend?model=" + encodeURIComponent(repo)).then(r => {
+    if ($("deploy-model").textContent !== repo) return;
+    if (!$("extra-args").value) $("extra-args").value = r.args;
+    $("args-src").textContent = t("argsSrc_" + r.source, r.base || "");
+  }).catch(() => $("args-src").textContent = "");
+}
+async function doDeploy() {
+  const btn = $("deploy-btn"); btn.disabled = true;
+  try {
+    const r = await api("/api/vllm/deploy", { model: $("deploy-model").textContent, gpu_mem: +$("gm").value,
+      max_len: $("max-len").value || null, extra: $("extra-args").value });
+    $("deploy-msg").innerHTML = `<div class="msg ok">${t("deployed", r.port)}</div>`;
+    setTimeout(() => { deployDlg.close(); loadVllm(); }, 1500);
+  } catch (e) { $("deploy-msg").innerHTML = `<div class="msg err">${esc(e.message)}</div>`; }
+  btn.disabled = false;
+}
+const tokenDlg = $("hf-token");
+function hfTokenDialog() { $("hf-token-input").value = ""; tokenDlg.showModal(); }
+async function saveHfToken(clear) {
+  await act("/api/hf/token", { token: clear ? "" : $("hf-token-input").value }, clear ? t("tokenCleared") : t("tokenSaved"), loadVllm);
+  tokenDlg.close();
+}
+
+// =============== Docker ===============
+async function loadContainers() {
+  let cs;
+  try { cs = await api("/api/docker/containers"); } catch (e) { put("ctr-list", trOr([], t("dockerErr") + esc(e.message), 5)); return; }
+  put("ctr-list", trOr(cs.map(c => {
+    const on = c.state === "running";
+    return `<tr><td><b>${esc(c.name)}</b><div class="faint small mono">${c.id}</div></td><td class="mono small">${esc(c.image)}</td>` +
+      `<td><span style="display:inline-flex;align-items:center;gap:8px"><i class="dot ${on ? "on" : c.state === "exited" ? "bad" : ""}"></i>${esc(c.status)}</span></td>` +
+      `<td>${on ? portLinks(c.ports) : c.ports.join(", ")}</td><td><div class="acts">` +
+      (on ? `<button class="b sm" onclick="ctrAct('${c.id}','stop')">${t("stop")}</button><button class="b sm" onclick="ctrAct('${c.id}','restart')">${t("restart")}</button>`
+          : `<button class="b sm" onclick="ctrAct('${c.id}','start')">${t("start")}</button>`) +
+      `<button class="b sm" onclick="showLogs('${c.id}','${esc(c.name)}')">${t("logs")}</button>` +
+      `<button class="b sm danger" onclick="ctrAct('${c.id}','remove','${esc(c.name)}')">${t("remove")}</button></div></td></tr>`;
+  }), t("noContainers"), 5));
+}
+function ctrAct(id, action, name, reload = loadContainers) {
+  const words = { start: t("startedMsg"), stop: t("stoppedMsg"), restart: t("restarted"), remove: t("removed") };
+  if (action !== "remove") toast(t("working"));
+  act("/api/docker/action", { id, action }, words[action], reload, action === "remove" ? t("confirmRemoveCtr", name) : null);
+}
+const logs = $("logs");
+async function showLogs(id, name) {
+  if (id) { showLogs.id = id; $("logs-title").textContent = t("logsTitle", name); }
+  if (!logs.open) logs.showModal();
+  $("logs-body").textContent = "…";
+  try { $("logs-body").textContent = (await api("/api/docker/logs?id=" + showLogs.id)).logs || t("noLogs"); }
+  catch (e) { $("logs-body").textContent = t("error") + e.message; }
+  $("logs-body").scrollTop = 1e9;
+}
+async function loadImages() {
+  let is;
+  try { is = await api("/api/docker/images"); } catch (e) { put("img-list", trOr([], t("dockerErr") + esc(e.message), 5)); return; }
+  put("img-list", trOr(is.map(i => {
+    const tag = i.tags[0] || "<none>";
+    return `<tr><td class="mono small"><b>${esc(i.tags.join(", ") || "<none>")}</b>${i.used ? ` <span class="chip a">${t("inUse")}</span>` : ""}</td>` +
+      `<td class="mono faint small">${i.id}</td><td class="r">${size(i.size)}</td><td class="muted">${date(i.created)}</td><td><div class="acts">` +
+      (i.tags[0] ? `<button class="b sm" onclick="useImage('${esc(tag)}')">${t("run")}</button>` : "") +
+      `<button class="b sm danger" onclick="act('/api/docker/image-remove',{id:'${i.id}'},t('imageDeleted'),loadImages,t('confirmDelImage','${esc(tag)}'))">${t("del")}</button></div></td></tr>`;
+  }), t("noImages"), 5));
+}
+function useImage(tag) { $("run-image").value = tag; showSec("run"); $("run-name").focus(); }
+function progressHtml(name, ev) {
+  if (ev.error) return `<div class="msg err">${esc(name)}: ${esc(ev.error)}</div>`;
+  if (ev.status === "success") return `<div class="msg ok">${t("pulled", esc(name))}</div>`;
+  const p = ev.total ? 100 * (ev.completed || 0) / ev.total : 0;
+  return `<div class="job" style="margin-top:12px"><span><b>${esc(name)}</b> <span class="muted">${esc(ev.status || "")}</span></span>` +
+    `<span class="muted">${ev.total ? `${size(ev.completed || 0)} / ${size(ev.total)} · ${p.toFixed(0)}%` : ""}</span><div class="bar"><i style="width:${p}%"></i></div></div>`;
+}
+async function pullImage() {
+  const image = $("pull-image").value.trim(); if (!image) return;
+  const el = $("image-progress"); let lastEv = {};
+  el.innerHTML = progressHtml(image, { status: "…" });
+  try { await stream("/api/docker/pull", { image }, ev => { lastEv = ev; el.innerHTML = progressHtml(image, ev); }); }
+  catch (e) { lastEv = { error: e.message }; el.innerHTML = progressHtml(image, lastEv); }
+  if (lastEv.status === "success") { $("pull-image").value = ""; loadImages(); }
+}
+async function loadVolumes() {
+  let vs;
+  try { vs = await api("/api/docker/volumes"); } catch (e) { put("vol-list", trOr([], t("dockerErr") + esc(e.message), 3)); return; }
+  put("vol-list", trOr(vs.map(v => `<tr><td class="mono"><b>${esc(v.name)}</b></td><td class="mono faint small">${esc(v.mount)}</td>` +
+    `<td><div class="acts"><button class="b sm danger" onclick="act('/api/docker/volume-remove',{name:'${esc(v.name)}'},t('volDeleted'),loadVolumes,t('confirmDelVol','${esc(v.name)}'))">${t("del")}</button></div></td></tr>`),
+    t("noVolumes"), 3));
+}
+async function runContainer() {
+  const spec = { image: $("run-image").value, name: $("run-name").value, ports: $("run-ports").value, env: $("run-env").value,
+                 volumes: $("run-volumes").value, cmd: $("run-cmd").value, restart: $("run-restart").value, gpu: $("run-gpu").checked };
+  if (!spec.image.trim()) { $("run-image").focus(); return; }
+  const btn = $("run-btn"); btn.disabled = true; btn.textContent = t("running");
+  try {
+    await api("/api/docker/run", spec);
+    $("run-msg").innerHTML = `<div class="msg ok">${t("started")}</div>`;
+    setTimeout(() => showSec("containers"), 800);
+  } catch (e) { $("run-msg").innerHTML = `<div class="msg err">${esc(e.message)}</div>`; }
+  btn.disabled = false; btn.textContent = t("run");
+}
+
+// =============== TensorFold ===============
+const tfDlg = $("tfdeploy");
+let tfStat = null;
+const kvGib = ctx => Math.ceil(17888 * ctx / 2 ** 30);
+function tfRender() {
+  const st = tfStat; if (!st) return;
+  put("tf-engine", st.present ? `<div class="msg ok">${t("tfEngineReady", `<span class="mono">${esc(st.image)}</span>`)}</div>`
+    : st.pulling ? `<div class="msg info">${t("tfEnginePulling")}</div>`
+    : `<div class="msg info">${t("tfEngineMissing")}<div style="margin-top:10px"><button class="b primary" onclick="tfPrepare()">${icon("down")} ${t("getEngine")}</button></div></div>`);
+  put("tf-note", $("tf-model").textContent === st.recommended ? "" : `<div class="msg info">${t("tfUntested", `<span class="mono">${esc(st.recommended)}</span>`)}</div>`);
+  const ctx = +$("tf-context").value, par = +$("tf-parallel").value, vis = $("tf-vision").checked;
+  const need = st.weights_gib + kvGib(ctx) + 8 + (vis ? 2 : 0) + st.reserve_gib + 2, low = st.mem_available < need;
+  $("tf-mem").className = "msg " + (low ? "err" : "info");
+  $("tf-mem").innerHTML = t("tfMem", need, st.mem_available) + "<br>" + t("tfKv", par, kvGib(ctx)) + (low ? "<br>" + t("tfMemLow") : "");
+  $("tf-force-wrap").style.display = low ? "" : "none";
+  $("tf-btn").disabled = !st.present;
+}
+async function tfRefresh() { try { tfStat = await api("/api/tf/status"); tfRender(); } catch (e) { $("tf-msg").innerHTML = `<div class="msg err">${esc(e.message)}</div>`; } }
+["tf-context", "tf-parallel", "tf-vision"].forEach(id => $(id).onchange = tfRender);
+function openTfDeploy(repo) {
+  $("tf-model").textContent = repo; $("tf-msg").innerHTML = ""; $("tf-force").checked = false;
+  tfDlg.showModal(); tfRefresh();
+  clearInterval(openTfDeploy.timer);
+  openTfDeploy.timer = setInterval(() => { if (tfDlg.open) tfRefresh(); else clearInterval(openTfDeploy.timer); }, 3000);
+}
+async function tfPrepare() {
+  try { await api("/api/tf/prepare", {}); toast(t("tfEnginePulling")); } catch (e) { toast(t("error") + e.message, 6000); }
+  pollJobs(); tfRefresh();
+}
+async function doTfDeploy() {
+  const btn = $("tf-btn"); btn.disabled = true;
+  try {
+    const r = await api("/api/tf/deploy", { model: $("tf-model").textContent, parallel: +$("tf-parallel").value,
+      context: +$("tf-context").value, vision: $("tf-vision").checked, force: $("tf-force").checked });
+    $("tf-msg").innerHTML = `<div class="msg ok">${t("tfDeployed", r.port, "Qwen3.8-Flash-Next")}</div>`;
+    setTimeout(loadTf, 1000);
+  } catch (e) {
+    const m = e.message.match(/^MEM:(\d+):(\d+)$/);
+    $("tf-msg").innerHTML = `<div class="msg err">${m ? t("tfMem", m[1], m[2]) + "<br>" + t("tfMemLow") : esc(e.message)}</div>`;
+    if (m) $("tf-force-wrap").style.display = "";
+  }
+  btn.disabled = false; tfRender();
+}
+
+async function loadTf() {
+  let st, vs, local = [];
+  try { [st, vs] = await Promise.all([api("/api/tf/status"), api("/api/vllm/status")]); }
+  catch (e) { put("tf-deploys", trOr([], t("dockerErr") + esc(e.message), 4)); return; }
+  try { local = await api("/api/hf/local"); } catch {}
+  tfStat = st;
+  hfLocal = new Set(local.map(m => m.id));
+  put("tf-engine-card", `<div class="card-h"><h2>${icon("bolt")}${t("tfEngineTitle")}</h2><span class="grow"></span>` +
+    (st.present ? `<span class="pill ok"><i class="dot on"></i>${t("ready")}</span>` : `<span class="pill warn">${st.pulling ? t("downloading") : t("tfNeedEngine")}</span>`) + `</div>` +
+    (st.present ? `<div class="muted">${t("tfEngineReady", `<span class="mono">${esc(st.image)}</span>`)}</div>`
+     : st.pulling ? `<div class="muted">${t("tfEnginePulling")}</div>`
+     : `<div class="muted">${t("tfEngineMissing")}</div><div style="margin-top:12px"><button class="b primary" onclick="tfPrepare()">${icon("down")} ${t("getEngine")}</button></div>`));
+  put("tf-deploys", trOr(vs.deployments.filter(c => c.engine === "tensorfold").map(c => {
+    const on = c.state === "running", port = c.ports[0];
+    const stp = !on ? `<span class="pill">${t("stopped")}</span>` : c.ready ? `<span class="pill ok"><i class="dot on"></i>${t("ready")}</span>` : `<span class="pill warn"><i class="dot warn"></i>${t("loadingState")}</span>`;
+    return `<tr><td><b>${esc(c.model)}</b><div class="faint small mono">${esc(c.name)}</div></td>` +
+      `<td class="mono small">${port ? `http://127.0.0.1:${port}/v1` : "–"}</td><td>${stp}</td><td><div class="acts">` +
+      `<button class="b sm" onclick="showLogs('${c.id}','${esc(c.name)}')">${t("logs")}</button>` +
+      (on ? `<button class="b sm" onclick="ctrAct('${c.id}','stop',null,loadTf)">${t("stop")}</button>` : `<button class="b sm" onclick="ctrAct('${c.id}','start',null,loadTf)">${t("start")}</button>`) +
+      `<button class="b sm danger" onclick="ctrAct('${c.id}','remove','${esc(c.name)}',loadTf)">${t("remove")}</button></div></td></tr>`;
+  }), t("tfNoDeploys"), 4));
+  // 已完成的兼容检查点，以及正在下载的同类仓库（名字含 Flash-Next）
+  const rows = local.filter(m => m.engine === "tensorfold" || (!m.complete && /flash-next/i.test(m.id)));
+  put("tf-local", trOr(rows.map(m => {
+    const stl = m.downloading ? `<span class="pill warn">${t("downloading")}</span>` : m.complete ? `<span class="pill ok">${t("complete")}</span>`
+             : m.job === "paused" ? `<span class="pill">${t("job_paused")}</span>` : `<span class="pill bad">${t("incomplete")}</span>`;
+    const rec = m.id === st.recommended ? ` <span class="chip a">${t("tfRecommended")}</span>` : "";
+    return `<tr><td><a class="mono" href="https://huggingface.co/${esc(m.id)}" target="_blank"><b>${esc(m.id)}</b></a>${rec}</td><td class="r">${size(m.size)}</td><td>${stl}</td><td><div class="acts">` +
+      (m.complete ? `<button class="b sm primary" onclick="openTfDeploy('${esc(m.id)}')">${t("deploy")}</button>` : "") +
+      (!m.complete && !m.downloading ? `<button class="b sm" onclick="hfDownload('${esc(m.id)}')">${t("resume")}</button>` : "") +
+      (!m.downloading ? `<button class="b sm danger" onclick="act('/api/hf/delete',{repo:'${esc(m.id)}'},t('deletedDone','${esc(m.id)}'),loadTf,t('confirmDelHf','${esc(m.id)}'))">${t("del")}</button>` : "") +
+      `</div></td></tr>`;
+  }), t("tfNoLocal"), 4));
+}
+
+async function tfSearch() {
+  tfSearch.done = true;
+  const q = $("tf-q").value.trim();
+  $("tf-results").innerHTML = `<div class="empty">${t("searching")}</div>`;
+  let rs;
+  try { rs = await api(`/api/tf/search?q=${encodeURIComponent(q)}`); }
+  catch (e) { $("tf-results").innerHTML = `<div class="msg err">${t("searchFailed")}${esc(e.message)}</div>`; return; }
+  if (q !== $("tf-q").value.trim()) return;
+  $("tf-results").innerHTML = rs.map(r => {
+    const params = r.params ? (r.params / 1e9).toFixed(0) + "B" : null;
+    const have = hfLocal.has(r.id);
+    return `<div class="result">
+      <div><a class="name mono" href="https://huggingface.co/${esc(r.id)}" target="_blank">${esc(r.id)}</a>
+        ${r.recommended ? `<span class="chip a">${t("tfRecommended")}</span>` : `<span class="chip">${t("tfUntestedChip")}</span>`}
+        ${params ? `<span class="chip">${params}</span>` : ""}${r.gated ? `<span class="chip" style="color:var(--warn)">${icon("key")} ${t("gated")}</span>` : ""}</div>
+      <div class="side">${have ? `<span class="pill ok">${t("installed")}</span>` : `<button class="b sm ${r.recommended ? "primary" : ""}" onclick="hfDownload('${esc(r.id)}', this)">${icon("down")} ${t("download")}</button>`}</div>
+      <div class="foot"><span>${icon("down")} ${compact(r.downloads)}</span><span>${icon("heart")} ${compact(r.likes)}</span>
+        ${r.library ? `<span>${esc(r.library)}</span>` : ""}${r.updated ? `<span>${icon("clock")} ${date(r.updated)}</span>` : ""}</div></div>`;
+  }).join("") || `<div class="empty">${t("noResults")}</div>`;
+}
+$("tf-q").addEventListener("input", debounce(tfSearch, 300));
+
+// =============== 网络 / Tailscale ===============
+const tsState = st => ({ Running: ["ok", t("tsOn")], Stopped: ["", t("tsOff")], NeedsLogin: ["warn", t("tsNeedsLogin")],
+  NeedsMachineAuth: ["warn", t("tsNeedsApproval")], Starting: ["warn", t("tsStarting")] }[st] || ["bad", st || "–"]);
+function tsSwitch(on, extra = "") {
+  return `<span class="switch ${on ? "on" : ""}" ${extra}></span>`;
+}
+function renderTsQuick(b) {
+  if (!b || !b.installed) { put("ts-quick", ""); return; }
+  const on = b.state === "Running", [cls, label] = tsState(b.state);
+  const sub = on ? `<span class="mono">${esc(b.ip || "")}</span> · ${t("tsOnlineDevices", b.online, b.peers)}`
+            : b.state === "NeedsLogin" ? t("tsLoginHint") : label;
+  put("ts-quick", `<button class="action toggle" style="width:100%" onclick="${b.state === "NeedsLogin" ? "showTab('network')" : `tsAct('${on ? "down" : "up"}')`}">` +
+    `${icon("globe")}<span class="txt"><b>Tailscale <span class="pill ${cls}" style="margin-left:4px">${label}</span></b><span>${sub}</span></span>` +
+    `${b.state === "NeedsLogin" ? `<span class="b sm">${t("tsLogin")}</span>` : tsSwitch(on)}</button>`);
+}
+
+let tsData = null;
+async function loadTs() {
+  try { tsData = await api("/api/tailscale/status"); } catch (e) { put("ts-card", `<div class="msg err">${esc(e.message)}</div>`); return; }
+  const d = tsData;
+  if (!d.installed) { put("ts-card", `<div class="msg err">${t("tsNotInstalled")}</div>`); return; }
+  const on = d.state === "Running", [cls, label] = tsState(d.state), me = d.self || {};
+  const login = d.state === "NeedsLogin" || d.state === "NeedsMachineAuth";
+  put("ts-card", `<div class="card-h"><h2>${icon("globe")}Tailscale</h2><span class="grow"></span><span class="pill ${cls}">${label}</span></div>` +
+    (d.operator_ok === false ? `<div class="msg err" style="margin-bottom:12px">${t("tsNoOperator")}<br><code>sudo tailscale set --operator=$USER</code></div>` : "") +
+    (login ? `<div class="msg info">${t(d.state === "NeedsLogin" ? "tsLoginExplain" : "tsApprovalExplain")}</div>
+       <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">` +
+       (d.auth_url ? `<a class="b primary" href="${esc(d.auth_url)}" target="_blank">${t("tsOpenLogin")} ${icon("ext")}</a><span class="mono small muted" style="align-self:center">${esc(d.auth_url)}</span>`
+                   : `<button class="b primary" onclick="tsAct('up')">${t("tsLogin")}</button>`) + `</div>`
+     : `<button class="action toggle" style="width:100%;margin-bottom:12px" onclick="tsAct('${on ? "down" : "up"}')">${icon("globe")}` +
+       `<span class="txt"><b>${on ? t("tsConnected") : t("tsDisconnected")}</b><span>${on ? t("tsOnExplain") : t("tsOffExplain")}</span></span>${tsSwitch(on)}</button>` +
+       `<dl class="kv">${[[t("tsTailnet"), esc(d.tailnet || "–")], [t("tsThisDevice"), esc(me.host || "–")],
+          ["MagicDNS", me.dns ? `<span class="mono">${esc(me.dns)}</span>` : "–"],
+          [t("tsIps"), (me.ips || []).map(ip => `<span class="mono">${esc(ip)}</span>`).join("<br>") || "–"],
+          [t("tsSshCmd"), me.ips?.[0] ? `<span class="mono small">ssh ${esc(d.user || "user")}@${esc(me.ips[0])}</span>` : "–"],
+          [t("version"), esc(d.version || "–")]].map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>` +
+       `<div style="margin-top:12px"><button class="b sm" onclick="tsAct('reauth', null, t('tsConfirmReauth'))">${t("tsReauth")}</button></div>`) +
+    (d.health?.length ? `<div class="msg info" style="margin-top:12px">${d.health.map(esc).join("<br>")}</div>` : ""));
+
+  // 设置
+  const pr = d.prefs || {}, exits = (d.peers || []).filter(p => p.exit_option);
+  const row = (key, title, desc, val) => `<button class="action toggle" style="width:100%;margin-bottom:8px" ${on ? "" : "disabled"} onclick="tsSet('${key}', ${!val})">` +
+    `<span class="txt"><b>${title}</b><span>${desc}</span></span>${tsSwitch(val)}</button>`;
+  const exitNow = exits.find(p => p.exit_node);
+  put("ts-settings", login ? `<div class="empty">${t("tsLoginFirst")}</div>` :
+    row("accept_dns", t("tsDns"), t("tsDnsDesc"), pr.accept_dns) +
+    row("ssh", t("tsSsh"), t("tsSshDesc"), pr.ssh) +
+    row("accept_routes", t("tsRoutes"), t("tsRoutesDesc"), pr.accept_routes) +
+    row("advertise_exit", t("tsAdvExit"), t("tsAdvExitDesc"), pr.advertise_exit) +
+    row("shields_up", t("tsShields"), t("tsShieldsDesc"), pr.shields_up) +
+    `<div class="form" style="grid-template-columns:1fr 1fr;margin-top:6px">
+      <div><label>${t("tsExitNode")}</label><select id="ts-exit" ${on ? "" : "disabled"} onchange="tsSet('exit_node', this.value)">
+        <option value="">${t("tsExitNone")}</option>${exits.map(p => `<option value="${esc(p.ips[0])}" ${p.exit_node ? "selected" : ""}>${esc(p.host)}${p.online ? "" : " (offline)"}</option>`).join("")}</select></div>
+      <div><label>${t("tsHostname")}</label><div class="inline"><input id="ts-host" value="${esc(pr.hostname || me.host || "")}">
+        <button class="b" style="height:36px" ${on ? "" : "disabled"} onclick="tsSet('hostname', document.getElementById('ts-host').value)">${t("save")}</button></div></div>
+    </div>` + (exitNow ? `<p class="note">${t("tsExitActive", esc(exitNow.host))}</p>` : ""));
+
+  // 设备
+  put("ts-peers", trOr((d.peers || []).map(p => {
+    const conn = !p.online ? "–" : p.cur_addr ? `<span class="pill ok">${t("tsDirect")}</span>` : p.relay ? `<span class="pill warn">${t("tsRelay", esc(p.relay))}</span>` : `<span class="faint">${t("tsIdle")}</span>`;
+    const seen = p.online ? `<span class="pill ok"><i class="dot on"></i>${t("online")}</span>` : `<span class="muted small">${p.last_seen && !p.last_seen.startsWith("0001") ? t("tsLastSeen", date(p.last_seen)) : t("offline")}</span>`;
+    return `<tr><td><b>${esc(p.host)}</b>${p.exit_node ? ` <span class="chip a">${t("tsExitChip")}</span>` : p.exit_option ? ` <span class="chip">exit node</span>` : ""}` +
+      `<div class="faint small">${esc(p.os || "")}${p.user ? " · " + esc(p.user) : ""}${p.dns ? ` · <span class="mono">${esc(p.dns)}</span>` : ""}</div></td>` +
+      `<td class="mono small">${(p.ips || []).slice(0, 1).map(esc).join("")}</td><td>${seen}</td><td>${conn}</td>` +
+      `<td class="r small muted">${p.rx || p.tx ? `↓${size(p.rx || 0)} ↑${size(p.tx || 0)}` : ""}</td>` +
+      `<td><div class="acts"><span class="small muted" id="ping-${esc(p.id)}"></span>${p.online ? `<button class="b sm" onclick="tsPing('${esc(p.ips[0])}','${esc(p.id)}')">Ping</button>` : ""}</div></td></tr>`;
+  }), login ? t("tsLoginFirst") : t("tsNoPeers"), 6));
+
+  // 分享到 tailnet
+  const base = me.dns ? `https://${me.dns}` : null;
+  put("ts-share", !on ? `<div class="empty">${t("tsLoginFirst")}</div>` :
+    `<button class="action toggle" style="width:100%" onclick="tsAct('serve', ${!d.serving}, ${d.serving ? "null" : "t('tsConfirmServe')"})">` +
+    `<span class="txt"><b>${t("tsServeTitle")}</b><span>${t("tsServeDesc")}</span></span>${tsSwitch(d.serving)}</button>` +
+    (d.serve_enable_url ? `<div class="msg info" style="margin-top:12px">${t("tsServeEnable")}<div style="margin-top:10px">` +
+      `<a class="b primary" href="${esc(d.serve_enable_url)}" target="_blank">${t("tsServeEnableBtn")} ${icon("ext")}</a></div></div>`
+     : d.serve_pending ? `<div class="msg info" style="margin-top:12px">${t("working")}</div>` : "") +
+    (d.serve_error ? `<div class="msg err" style="margin-top:12px">${esc(d.serve_error)}</div>` : "") +
+    (d.serving && base ? `<dl class="kv" style="margin-top:12px"><dt>${t("tsServeDash")}</dt><dd><a class="mono" href="${base}/" target="_blank">${esc(base)}/</a></dd>` +
+      `<dt>Open WebUI</dt><dd><a class="mono" href="${base}:8443/" target="_blank">${esc(base)}:8443/</a></dd></dl>` : "") +
+    `<p class="note">${t("tsServeNote")}</p>`);
+}
+
+async function tsAct(action, value, confirmText) {
+  if (confirmText && !confirm(confirmText)) return;
+  toast(t("working"));
+  try {
+    const r = await api("/api/tailscale", { action, value });
+    if (action === "serve" && r.enable_url) toast(t("tsServeEnable"), 8000);
+  }
+  catch (e) { toast(e.message === "NO_OPERATOR" ? t("tsNoOperator") : t("error") + e.message, 8000); }
+  setTimeout(() => { loadTs(); tick(); }, 1500);
+  if (action === "up") setTimeout(loadTs, 5000);
+}
+async function tsSet(key, value) { await act("/api/tailscale", { action: "set", key, value }, t("saved"), loadTs); }
+async function tsPing(ip, id) {
+  const el = $("ping-" + id); if (el) el.textContent = "…";
+  try { const r = await api("/api/tailscale", { action: "ping", ip }); if (el) el.textContent = `${r.latency} · ${r.via}`; }
+  catch (e) { if (el) el.textContent = e.message.slice(0, 60); }
+}
+async function loadNetcheck(fresh) {
+  if (fresh) put("ts-netcheck", `<dt>${t("searching")}</dt><dd></dd>`);
+  let n;
+  try { n = await api("/api/tailscale/netcheck" + (fresh ? "?fresh=1" : "")); } catch (e) { put("ts-netcheck", `<dt>${t("error")}</dt><dd>${esc(e.message)}</dd>`); return; }
+  const yn = v => v ? `<span class="pill ok">${t("yes")}</span>` : `<span class="pill">${t("no")}</span>`;
+  put("ts-netcheck", kv([["UDP", yn(n.udp)], ["IPv4", yn(n.ipv4) + (n.global_v4 ? ` <span class="mono small">${esc(n.global_v4)}</span>` : "")], ["IPv6", yn(n.ipv6)],
+    [t("tsDerp"), n.derp_ms != null ? `#${n.derp} · ${n.derp_ms} ms` : "–"], [t("tsNatHard"), n.nat_varies ? `<span class="pill warn">${t("yes")}</span>` : yn(false)],
+    ["UPnP / NAT-PMP / PCP", [n.upnp, n.pmp, n.pcp].map(v => v ? "✓" : "–").join(" / ")]]));
+}
+function renderLocalNet(n, inet) {
+  put("net-ifaces", trOr((n.links || []).map(l => `<tr><td><b>${esc(l.name)}</b>${l.name === n.dev ? ` <span class="chip a">${t("tsDefault")}</span>` : ""}</td>` +
+    `<td>${l.up ? `<span class="pill ok"><i class="dot on"></i>UP</span>` : `<span class="pill">DOWN</span>`}</td>` +
+    `<td class="mono small">${(l.ipv4 || []).map(esc).join("<br>") || "–"}</td><td class="mono small">${(l.ipv6 || []).map(esc).join("<br>") || "–"}</td>` +
+    `<td class="mono small faint">${esc(l.mac || "")}</td></tr>`), "–", 5));
+  const w = n.wifi;
+  put("net-detail", kv([[t("gateway"), n.gateway ? `<span class="mono">${esc(n.gateway)}</span>` : "–"], [t("dns"), (n.dns || []).map(esc).join(", ") || "–"],
+    ...(w ? [[t("wifi"), `${esc(w.ssid)} · ${esc(w.security || "")}`], [t("signal"), `${w.signal}% (${w.dbm} dBm) · ${esc(w.freq || "")}`], [t("tsLinkRate"), esc(w.rate || "–")]] : []),
+    [t("latency"), inet?.latency != null ? inet.latency + " ms" : "–"]]));
+}
+setInterval(() => { if ($("page-network").classList.contains("on")) loadTs(); }, 5000);
+
+// =============== opencode ===============
+const ocDlg = $("oc-dlg");
+const OPENCODE_URL = `${location.protocol}//opencode.localhost:${fwdPort}/`;
+function openOpencode() { openUrl("/open/opencode"); }
+async function opencodeInfo() {
+  let o;
+  try { o = await api("/api/opencode"); } catch (e) { toast(t("error") + e.message); return; }
+  put("oc-body", `<p class="note" style="margin-top:0">${t("ocIntro")}</p>
+    <label>${t("ocPassword")}</label>
+    <div class="inline"><input id="oc-pw" class="mono" readonly value="${esc(o.password)}">
+      <button class="b" style="height:36px" onclick="navigator.clipboard?.writeText(document.getElementById('oc-pw').value).then(() => toast(t('copied')), () => { document.getElementById('oc-pw').select(); })">${t("copy")}</button></div>
+    <dl class="kv" style="margin-top:14px"><dt>${t("ocDefault")}</dt><dd class="mono small">${esc(o.default || "–")}</dd>
+      <dt>${t("ocModels")}</dt><dd class="small">${o.models.map(m => `<span class="mono">${esc(m)}</span>`).join("<br>") || "–"}</dd></dl>
+    <p class="note">${t("ocAuto")}</p>
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <a class="b primary" href="${OPENCODE_URL}" target="_blank" ${o.running ? "" : 'style="pointer-events:none;opacity:.5"'}>${t("ocOpen")} ${icon("ext")}</a>
+      <button class="b" onclick="act('/api/opencode/sync',{},t('ocSynced'),openOpencode)">${t("ocResync")}</button></div>`);
+  if (!ocDlg.open) ocDlg.showModal();
+}
+
+// =============== 启动 ===============
+setTheme(document.documentElement.dataset.theme || "dark");
+applyI18n();
+try { showModelSec.cur = localStorage.getItem("spark-model-sec") || "ollama"; } catch {}
+let startTab = "overview";
+try { startTab = localStorage.getItem("spark-tab") || startTab; } catch {}
+const hashTab = location.hash.slice(1);
+if (["ollama", "vllm", "tensorfold"].includes(hashTab)) { showModelSec.cur = hashTab; showTab("models"); }
+else showTab(["overview", "models", "docker", "network"].includes(hashTab) ? hashTab : startTab);
+tick(); setInterval(tick, 1000);
+pollJobs(); setInterval(pollJobs, 1500);
+setInterval(() => {
+  if (!$("page-models").classList.contains("on")) return;
+  if (showModelSec.cur === "vllm") loadVllm();
+  if (showModelSec.cur === "tensorfold") loadTf();
+}, 5000);
+</script>
+</body>
+</html>

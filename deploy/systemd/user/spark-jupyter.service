@@ -1,0 +1,10 @@
+[Unit]
+Description=JupyterLab with CUDA PyTorch (http://localhost:11001)
+
+[Service]
+WorkingDirectory=%h/notebooks
+ExecStart=/bin/sh -c 'exec %h/.local/share/spark/jupyter-venv/bin/jupyter lab --no-browser --ip=127.0.0.1 --port=11001 --ServerApp.base_url=/jupyter/ --IdentityProvider.token="$(cat %h/.config/spark/jupyter_token)"'
+Restart=always
+
+[Install]
+WantedBy=default.target

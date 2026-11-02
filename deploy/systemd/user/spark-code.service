@@ -1,0 +1,14 @@
+[Unit]
+Description=VS Code for the Web, official serve-web (http://localhost:11000/code/)
+
+[Service]
+WorkingDirectory=%h
+# 独立的数据目录，与本地 VS Code Remote-SSH 使用的 ~/.vscode-server 完全分开
+ExecStart=%h/.local/share/spark/vscode-cli serve-web --host 127.0.0.1 --port 11002 \
+  --server-base-path /code --connection-token-file %h/.config/spark/vscode_token \
+  --cli-data-dir %h/.local/share/spark/vscode-web/cli --server-data-dir %h/.local/share/spark/vscode-web/data \
+  --default-folder %h --accept-server-license-terms --disable-telemetry
+Restart=always
+
+[Install]
+WantedBy=default.target

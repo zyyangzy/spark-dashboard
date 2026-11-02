@@ -1,0 +1,17 @@
+#!/bin/sh
+# Spark Dashboard 的特权操作，只允许以下几个固定动作（经 sudoers 免密调用）
+case "$1" in
+  desktop-off)
+    # 关闭图形桌面，以后开机/开盖都进命令行
+    systemctl set-default multi-user.target
+    systemctl stop display-manager
+    systemctl start getty@tty1
+    chvt 1 ;;
+  desktop-on)
+    systemctl set-default graphical.target
+    systemctl stop getty@tty1
+    systemctl start display-manager ;;
+  reboot)   systemctl reboot ;;
+  poweroff) systemctl poweroff ;;
+  *) echo "usage: spark-ctl desktop-on|desktop-off|reboot|poweroff" >&2; exit 2 ;;
+esac

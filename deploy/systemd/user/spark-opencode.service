@@ -1,0 +1,14 @@
+[Unit]
+Description=opencode web (http://opencode.localhost:11000), models auto-configured by Spark Dashboard
+
+[Service]
+WorkingDirectory=%h
+Environment=PATH=%h/.local/share/mise/shims:/usr/local/bin:/usr/bin:/opt/cuda/bin
+# 面板自动生成的模型配置，与 ~/.config/opencode/opencode.json 合并
+Environment=OPENCODE_CONFIG=%h/.config/spark/opencode.json
+# 固定密码（面板跳转时自动带上），否则每次重启都会随机生成新密码
+ExecStart=/bin/sh -c 'OPENCODE_SERVER_PASSWORD="$(cat %h/.config/spark/opencode_token)" exec %h/.local/share/mise/shims/opencode serve --hostname 127.0.0.1 --port 4096'
+Restart=always
+
+[Install]
+WantedBy=default.target

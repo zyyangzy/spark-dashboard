@@ -1,0 +1,12 @@
+[Unit]
+Description=Spark Dashboard backend
+After=docker.service ollama.service
+
+[Service]
+User=@USER@
+SupplementaryGroups=docker
+ExecStart=/usr/bin/python3 @HOME@/.local/share/spark/dashboard/server.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

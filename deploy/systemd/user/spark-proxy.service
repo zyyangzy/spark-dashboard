@@ -1,0 +1,9 @@
+[Unit]
+Description=Spark 统一入口 (http://localhost:11000)
+
+[Service]
+ExecStart=/usr/bin/caddy run --config %h/.config/spark/Caddyfile --adapter caddyfile
+Restart=always
+
+[Install]
+WantedBy=default.target

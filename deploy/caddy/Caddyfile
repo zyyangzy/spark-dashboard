@@ -1,0 +1,48 @@
+# Spark 统一入口：只需转发 11000 一个端口
+{
+	admin off
+	auto_https off
+	persist_config off
+}
+
+http://:11000 {
+	bind 127.0.0.1
+
+	# 压缩响应，减少 SSH 隧道里的流量（已压缩的响应会原样透传）
+	encode zstd gzip
+
+	# Open WebUI 不支持子路径，用子域名 webui.localhost
+	@webui host webui.localhost
+	handle @webui {
+		reverse_proxy 127.0.0.1:8080
+	}
+
+	# opencode 网页界面
+	@opencode host opencode.localhost
+	handle @opencode {
+		reverse_proxy 127.0.0.1:4096
+	}
+
+	# 任意本机服务：p<端口>.localhost -> 127.0.0.1:<端口>
+	@port header_regexp p Host ^p(\d+)\.localhost(:\d+)?$
+	handle @port {
+		reverse_proxy 127.0.0.1:{re.p.1} {
+			header_up Host {upstream_hostport}
+		}
+	}
+
+	handle /jupyter/* {
+		reverse_proxy 127.0.0.1:11001
+	}
+
+	# 在线 VS Code（官方 serve-web，用 --server-base-path /code 自己处理子路径）
+	handle /code* {
+		reverse_proxy 127.0.0.1:11002
+	}
+
+	handle {
+		reverse_proxy 127.0.0.1:11010 {
+			flush_interval -1
+		}
+	}
+}

@@ -1,0 +1,10 @@
+[Unit]
+Description=Turn off screen backlight when lid is closed
+
+[Service]
+Environment=SPARK_SCREEN_FLAG=@HOME@/.config/spark/screen_off
+ExecStart=/usr/bin/python3 /usr/local/bin/lid-backlight.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
